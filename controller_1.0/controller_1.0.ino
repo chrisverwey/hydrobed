@@ -25,8 +25,7 @@
 #include <ArduinoJson.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
-#include <TimeLib.h>
-#include <UdpBytewise.h>
+#include <NTPClient.h>
 
 #define BOARDTYPE "HYDROFARM_v1"
 #define SERIALDEBUG true
@@ -39,15 +38,14 @@
 #define STAPSK  "ourhome1"
 #endif
 
-const char ntpTimeServerName[] = "ntp.is.co.za"; // NTP server
-IPAddress ntpIPaddress = NULL;
-const int NTP_PACKET_SIZE = 48; // NTP time stamp is in the first 48 bytes of the message
-byte ntp_packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets
-long ntp_delay = 60*60*24; // once a day
-long ntp_countdown = 0;
-bool waitingForNTP = false;
-bool ntpGotIP = false;
 WiFiUDP UDP;
+
+// https://github.com/arduino-libraries/NTPClient
+// https://randomnerdtutorials.com/esp8266-nodemcu-date-time-ntp-client-server-arduino/
+// You can specify the time server pool and the offset, (in seconds)
+// additionaly you can specify the update interval (in milliseconds).
+NTPClient timeClient(UDP, "ntp.is.co.za", 7200, 86400000); // 24h refresh
+
 
 void info(String s) { if (SERIALDEBUG && DEBUGLEVEL>=0) Serial.println(s); }
 void debug(String s) { if (SERIALDEBUG && DEBUGLEVEL>=1) Serial.println(s); }
@@ -62,7 +60,7 @@ const char* password = STAPSK;
 // ---------------------------------------------------
 typedef struct {
   int activation_id;
-  // t_time start_time;
+  tm start_time;
   byte duration;
 } t_Activation;
 
@@ -81,8 +79,8 @@ typedef struct {
 
 int controller_id = NULL;
 long checkin_delay = 60;
-long checkin_countdown = 0;
-// t_time schedule_time = null;
+long checkin_countdown = 60;
+tm schedule_time ;
 
 t_Driver driver[] = {};
 
@@ -103,14 +101,12 @@ void setup() {
   pinMode(LED_BUILTIN, HIGH);       // Turn off LED to save power
   connectToWiFi();
   setupOTA();
-  NTPgetIP();
-  if (ntpGotIP) NTPstart();
   
   enableWebServer();
   webRegisterWithHome();
 
+  timeClient.begin();
   info("Startup complete");
-  NTPsendPacket();
 }
 
 /* 
@@ -118,21 +114,18 @@ void setup() {
  */
 int previousSecond = 70;
 void loop() {
+  timeClient.update();
   if (WiFi.status() != WL_CONNECTED) {
     WiFi.begin(ssid, password);
   }
-  if (second()!=previousSecond) {
-    previousSecond = second();
+  if (timeClient.getSeconds()!=previousSecond) {
+    previousSecond = timeClient.getSeconds();
     trace("Timer checkin_countdown:"+String(checkin_countdown));
     if (countdownTimer(checkin_countdown, checkin_delay)) webCheckinWithHome();
-    if (countdownTimer(ntp_countdown, ntp_delay) || waitingForNTP) NTPsendPacket();
-    if (!ntpGotIP) {
-      NTPgetIP();
-      if (ntpGotIP) NTPsendPacket();
-    }
-  }
-  if (waitingForNTP) {
-     NTPgetTime();   
+
+    //unsigned long epochTime = timeClient.getEpochTime();
+    //struct tm *ptm = gmtime ((time_t *)&epochTime );
+    //trace(String(1900+ptm->tm_year)+"/"+String(ptm->tm_mon+1)+"/"+String(ptm->tm_mday)+" "+String(ptm->tm_hour)+":"+String(ptm->tm_min)+":"+String(ptm->tm_sec));
   }
   ArduinoOTA.handle();
   WiFiClient client = server.available();
@@ -235,6 +228,7 @@ void setupOTA() {
   Serial.print ("IP address: ");
   Serial.println (WiFi.localIP());
 }
+
 // ---------------------------------------------------
 // ----------------- WiFi Section --------------------
 // ---------------------------------------------------
@@ -428,71 +422,6 @@ void webRefreshSchedule() {
   // GET http://localhost:8081/controller/1/configuration
   // Unpacked reply={"driver_id":1,"i2c_port":1,"schedule_read_freq":600,"pin_id":1,"pin_number":5,"activation_id":1,"start_time":"1900-01-01T06:57:00.000Z","duration":30},{"driver_id":1,"i2c_port":1,"schedule_read_freq":600,"pin_id":1,"pin_number":5,"activation_id":2,"start_time":"1900-01-01T06:55:00.000Z","duration":30},{"driver_id":1,"i2c_port":1,"schedule_read_freq":600,"pin_id":1,"pin_number":5,"activation_id":3,"start_time":"1900-01-01T15:00:00.000Z","duration":30},{"driver_id":1,"i2c_port":1,"schedule_read_freq":600,"pin_id":1,"pin_number":5,"activation_id":4,"start_time":"1900-01-01T15:02:00.000Z","duration":30}
 }
-
-// ---------------------------------------------------
-// ----------------- WiFi Section --------------------
-// ---------------------------------------------------
-// https://tttapa.github.io/ESP8266/Chap15%20-%20NTP.html
-
-void NTPgetIP() {
-  ntpGotIP = true;
-  if(!WiFi.hostByName(ntpTimeServerName, ntpIPaddress)) { // Get the IP address of the NTP server
-    info("DNS lookup failed.");
-    ntpGotIP = false;
-  }  
-}
-
-void NTPstart() {
-  info("Starting UDP");
-  UDP.begin(123);                          // Start listening for UDP messages on port 123
-  debug("Local port:\t");
-  String s = String(UDP.localPort());
-  debug(s);
-}
-
-void NTPgetTime() {
-  if (UDP.parsePacket() == 0) { // If there's no response (yet)
-    return;
-  }
-  UDP.read(ntp_packetBuffer, NTP_PACKET_SIZE); // read the packet into the buffer
-  // Combine the 4 timestamp bytes into one 32-bit number
-  uint32_t NTPTime = (ntp_packetBuffer[40] << 24) | (ntp_packetBuffer[41] << 16) | (ntp_packetBuffer[42] << 8) | ntp_packetBuffer[43];
-  // Convert NTP time to a UNIX timestamp:
-  // Unix time starts on Jan 1 1970. That's 2208988800 seconds in NTP time:
-  const uint32_t seventyYears = 2208988800UL;
-  // subtract seventy years:
-  uint32_t UNIXTime = NTPTime - seventyYears;
-  int hr = getHours(UNIXTime);
-  int mn = getMinutes(UNIXTime);
-  int sc = getSeconds(UNIXTime);
-  setTime(UNIXTime);
-  waitingForNTP=false;
-}
-
-void NTPsendPacket() {
-  memset(NTPBuffer, 0, NTP_PACKET_SIZE);  // set all bytes in the buffer to 0
-  // Initialize values needed to form NTP request
-  NTPBuffer[0] = 0b11100011;   // LI, Version, Mode
-  // send a packet requesting a timestamp:
-  UDP.beginPacket(ntpIPaddress, 123); // NTP requests are to port 123
-  UDP.write(NTPBuffer, NTP_PACKET_SIZE);
-  UDP.endPacket();
-  waitingforNTP=true;
-}
-
-inline int getSeconds(uint32_t UNIXTime) {
-  return UNIXTime % 60;
-}
-
-inline int getMinutes(uint32_t UNIXTime) {
-  return UNIXTime / 60 % 60;
-}
-
-inline int getHours(uint32_t UNIXTime) {
-  return UNIXTime / 3600 % 24;
-}
-
-
 
 // ---------------------------------------------------
 // ----------------- I2C Section ---------------------
