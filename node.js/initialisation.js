@@ -32,7 +32,7 @@ var server = app.listen(8081, function () {
 
     console.log("app listening at http://%s:%s", host, port)
 });
-//Date.prototype.toJSON = function(){ return moment(this).tz('Africa/Johannesburg').format("YYYY-MM-DDTHH:mm:ss:ms"); }
+//Date.prototype.toJSON = function(){ return moment(this.addHours(-2)).format("YYYY-MM-DDTHH:mm:ss:ms"); }
 
 app.get('/controller/:controllerId/', function (req, res) {
     sql.connect(sqlConfig, function() {
@@ -202,12 +202,12 @@ app.post('/controller', urlencodedParser, function (req, res) {
         var request = new sql.Request();
         var stringRequest = 'select c.controller_id, '+
         	'c.checkin_delay, '+
-        	'max(activation.start_time) as schedule_time '+
+        	'max(activation.last_updated) as schedule_time '+
 			'from controller C '+
 			'join driver on driver.controller_id = c.controller_id '+
 			'join pin on pin.driver_id = driver.driver_id '+
 			'join activation on activation.pin_id = pin.pin_id '+
-			'group by c.controller_id, c.checkin_delay, c.schedule_time;'
+			'group by c.controller_id, c.checkin_delay;'
 
         request.query(stringRequest, function(err, recordset) {
             if(err) console.log(err);

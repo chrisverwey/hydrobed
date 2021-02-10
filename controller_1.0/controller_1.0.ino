@@ -47,9 +47,9 @@ WiFiUDP UDP;
 NTPClient timeClient(UDP, "ntp.is.co.za", 7200, 86400000); // 24h refresh
 
 
-void info(String s) { if (SERIALDEBUG && DEBUGLEVEL>=0) Serial.println(s); }
-void debug(String s) { if (SERIALDEBUG && DEBUGLEVEL>=1) Serial.println(s); }
-void trace(String s) { if (SERIALDEBUG && DEBUGLEVEL>=2) Serial.println(s); }
+void info(String s) { if (SERIALDEBUG && DEBUGLEVEL>=0) Serial.println("INFO:"+s); }
+void debug(String s) { if (SERIALDEBUG && DEBUGLEVEL>=1) Serial.println("DEBUG:"+s); }
+void trace(String s) { if (SERIALDEBUG && DEBUGLEVEL>=2) Serial.println("TRACE:"+s); }
 
 
 const char* ssid = STASSID;
@@ -349,12 +349,34 @@ void updateOurSettings(String payload) {
   StaticJsonDocument<384> doc;
   
   DeserializationError error2 = deserializeJson(doc, data);
+  int save_controller_id = controller_id;
+  int save_checkin_delay = checkin_delay;
 
   controller_id = doc["controller_id"];
   checkin_delay = doc["checkin_delay"];
-  
-  debug("Setting values controller_id="+String(controller_id)+" checkin_delay="+String(checkin_delay));
-//// TODO t_time schedule_time = null;
+  String schedule = doc["schedule_time"];
+  if (schedule.length()>0) { //2021-02-10T12:34:56.000Z"
+    trace("updateOurSettings:schedule received="+schedule);
+    schedule_time.tm_mday  = schedule.substring(8,10).toInt();
+    schedule_time.tm_mon  = schedule.substring(5,7).toInt()-1;
+    schedule_time.tm_year = schedule.substring(0,4).toInt()-1900;
+    schedule_time.tm_hour = schedule.substring(11,13).toInt();
+    schedule_time.tm_min  = schedule.substring(14,16).toInt();
+    schedule_time.tm_sec  = schedule.substring(17,19).toInt();
+  }
+  // Protect if server is offline and we get empty data back.
+  if (controller_id == 0) controller_id = save_controller_id;
+  if (checkin_delay == 0) checkin_delay = save_checkin_delay;
+  // If this is our first checkin, controller_id is ok to be 0.
+  if (checkin_delay == 0) {
+    info("updateOurSettings:Checkin delay invalid. Forcing it to 60"); 
+    checkin_delay=60;
+  } 
+   char buffer [80];
+   strftime (buffer,80,"%F %T",&schedule_time);
+
+  debug("updateOurSettings:Setting values controller_id="+String(controller_id)+" checkin_delay="+String(checkin_delay)+" schedule="+buffer);
+
 }
 
 /*
