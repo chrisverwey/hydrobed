@@ -198,6 +198,22 @@ boolean isScheduleOutOfDate() {
   return true;
 }
 
+/*
+ * Utility function to parse a string date/time from JSON 
+ * into a tm structure.
+ *  http://www.cplusplus.com/reference/ctime/tm/
+ */
+void parseDateTime(tm &datetime, String s) {
+    //2021-02-10T12:34:56.000Z"
+    trace("updateOurSettings:schedule received="+s);
+    datetime.tm_mday = s.substring(8,10).toInt();
+    datetime.tm_mon  = s.substring(5,7).toInt()-1;
+    datetime.tm_year = s.substring(0,4).toInt()-1900;
+    datetime.tm_hour = s.substring(11,13).toInt();
+    datetime.tm_min  = s.substring(14,16).toInt();
+    datetime.tm_sec  = s.substring(17,19).toInt();
+}
+
 // ---------------------------------------------------
 // ----------------- OTA Section ---------------------
 // ---------------------------------------------------
@@ -355,13 +371,7 @@ void updateOurSettings(String payload) {
   checkin_delay = doc["checkin_delay"];
   String schedule = doc["schedule_time"];
   if (schedule.length()>0) { //2021-02-10T12:34:56.000Z"
-    trace("updateOurSettings:schedule received="+schedule);
-    schedule_time.tm_mday  = schedule.substring(8,10).toInt();
-    schedule_time.tm_mon  = schedule.substring(5,7).toInt()-1;
-    schedule_time.tm_year = schedule.substring(0,4).toInt()-1900;
-    schedule_time.tm_hour = schedule.substring(11,13).toInt();
-    schedule_time.tm_min  = schedule.substring(14,16).toInt();
-    schedule_time.tm_sec  = schedule.substring(17,19).toInt();
+    parseDateTime(schedule_time, schedule);
   }
   // Protect if server is offline and we get empty data back.
   if (controller_id == 0) controller_id = save_controller_id;
