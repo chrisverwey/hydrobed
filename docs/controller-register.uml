@@ -1,1 +1,33 @@
-/Users/chrisv/Downloads/Plants/docs/controller-register.uml
+@startuml
+
+participant "Farm\nController" as Controller order 1 #lightpink
+participant "Central Mars\nServer" as Home order 2
+
+
+Controller -> Home : Register with central server\n* MAC address,\n* uptime
+note right
+	The controller registers with the
+	main server on startup.
+end note
+
+Home --> Controller : * check in frequency,\n* sensor read frequency,\n* schedule version
+note right 
+	The controller sends back control data. 
+	Check in frequency is the delay in seconds 
+	between when the controller must check in 
+	with the central server again.
+end note
+Controller -> Home : Request schedule
+Home --> Controller : Schedule
+
+... After check in frequency timeout ...
+
+Controller -> Home : Check in with central server\n* MAC address,\n* uptime
+Home --> Controller : * check in frequency,\n* sensor read frequency,\n* schedule version
+
+... if schedule version <> server schedule version ...
+
+Controller -> Home : Request schedule
+Home --> Controller : Schedule
+
+@enduml

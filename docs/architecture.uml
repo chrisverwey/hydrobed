@@ -1,1 +1,85 @@
-/Users/chrisv/Downloads/Plants/docs/architecture.uml
+@startuml
+title Example of Mars farm electronics architecture
+
+node "Lettuce bed 1" as FB1 {
+	[Farm Controller] as F1Controller #lightblue
+	[Bed driver board] as F1A1Driver #lightblue
+	[Water reservour driver board] as F1A2Driver #lightblue
+	interface "Water fill pump" as F1P1Water #lightblue
+	interface "pH sensor" as F1S1Water #lightblue
+	interface "Water level sensor" as F1S2Water #lightblue
+	interface "Soil moisture 1 sensor" as F1S1Bed #lightblue
+	interface "Soil moisture 2 sensor " as F1S2Bed #lightblue
+}
+
+F1Controller -down- F1A1Driver
+F1Controller -up- F1A2Driver
+
+F1A1Driver -down- F1S1Bed
+F1A1Driver -down- F1S2Bed
+
+F1A2Driver -up- F1P1Water 
+F1A2Driver -up- F1S1Water
+F1A2Driver -up- F1S2Water
+
+node "Lettuce bed 2" as FB2{
+	[Farm Controller] as F2Controller #lightgreen
+	[Bed driver board] as F2A1Driver #lightgreen
+	[Water reservour driver board] as F2A2Driver #lightgreen
+	interface "Water fill pump" 		as F2P1Water #lightgreen
+	interface "pH sensor" 				as F2S1Water #lightgreen
+	interface "Water level sensor" 		as F2S2Water #lightgreen
+	interface "Soil moisture 1 sensor"  as F2S1Bed #lightgreen
+	interface "Soil moisture 2 sensor " as F2S2Bed #lightgreen
+}
+
+F2Controller -up- F2A1Driver
+F2Controller -up- F2A2Driver
+
+F2A1Driver -up- F2S1Bed
+F2A1Driver -up- F2S2Bed
+
+F2A2Driver -up- F2P1Water 
+F2A2Driver -up- F2S1Water
+F2A2Driver -up- F2S2Water
+
+node "Tomato bed 1 controller" as FB3 {
+	[Farm Controller] as F3Controller #lightpink
+	[Bed driver board] as F3A1Driver  #lightpink
+	[Water reservour driver board] as F3A2Driver  #lightpink
+	interface "Water fill pump" 		as F3P1Water #lightgreen
+	interface "pH sensor" 				as F3S1Water #lightgreen
+	interface "Water level sensor" 		as F3S2Water #lightgreen
+	interface "Soil moisture 1 sensor"  as F3S1Bed #lightgreen
+	interface "Soil moisture 2 sensor " as F3S2Bed #lightgreen
+}
+F3Controller -down- F3A1Driver
+F3Controller -down- F3A2Driver
+
+F3A1Driver -down- F3S1Bed
+F3A1Driver -down- F3S2Bed
+
+F3A2Driver -down- F3P1Water 
+F3A2Driver -down- F3S1Water
+F3A2Driver -down- F3S2Water
+
+[Central Mars Server] as Home
+Home <-left-> F1Controller 
+Home -left- FB1 #white
+Home <-up-> F2Controller
+Home -up- FB2 #white
+Home <-down-> F3Controller
+Home -down- FB3 #white
+
+note right of Home
+	Central computer talks to a farm controller board on each farm via Wifi. 
+	Each controller directs sensors and motors linked to driver boards 
+	in different parts of the farms. 
+	The controller is wired to driver boards (not Wifi).
+	Driver boards are dumb. They take instructions from the controller.
+	Each farm can have many driver boards each with a different sensor or motor
+	suite attached, e.g. grow bed, sump, water reservoir, air quality, etc.
+end note
+
+
+@enduml

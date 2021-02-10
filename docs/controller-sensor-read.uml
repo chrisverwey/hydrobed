@@ -1,1 +1,47 @@
-/Users/chrisv/Downloads/Plants/docs/controller-sensor-read.uml
+@startuml
+
+participant "Farm\nController" as Controller order 1 #lightpink
+database "Central Mars\nServer" as Home order 20
+
+participant "Grow Bed\ndriver board" as A1Driver order 3 #lightgreen
+boundary "Soil moisture 1\nsensor" as S1Bed order 4 #lightgreen
+boundary "Soil moisture 2\nsensor " as S2Bed order 5 #lightgreen
+
+participant "Water reservour\ndriver board" as A2Driver order 6 #lightblue
+boundary "pH\nsensor" as S1Water order 7 #lightblue
+boundary "Water level\nsensor" as S2Water order 8 #lightblue
+
+A1Driver <-> S1Bed : Read sensor
+A1Driver <-> S2Bed : Read sensor
+A2Driver <-> S1Water : Read sensor
+A2Driver <-> S2Water : Read sensor
+... Sensor read delay ...
+A1Driver <-> S1Bed : Read sensor
+A1Driver <-> S2Bed : Read sensor 
+
+note right
+The driver boards read the sensor values frequently
+to make sure they have the most up to date values
+when the controller asks for an update
+end note
+
+A2Driver <-> S1Water : Read sensor
+A2Driver <-> S2Water : Read sensor
+... Sensor read delay ...
+A1Driver <-> S1Bed : Read sensor
+A1Driver <-> S2Bed : Read sensor
+...
+Controller -> A1Driver : Read sensors
+A1Driver --> Controller : Sensor values
+
+note right
+Periodically the controller will request the latest
+sensor values from all of its driver boards
+and send these to the central server database.
+end note
+
+Controller -> A2Driver : Read sensors
+A2Driver --> Controller : Sensor values
+Controller ->> Home : Sensor values
+
+@enduml

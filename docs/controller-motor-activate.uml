@@ -1,1 +1,33 @@
-/Users/chrisv/Downloads/Plants/docs/controller-motor-activate.uml
+@startuml
+
+participant "Farm\nController" as Controller order 2 #lightpink
+database "Central Mars\nServer" as Home order 1
+
+participant "Water reservour\ndriver board" as A2Driver order 6 #lightblue
+participant "Water fill\npump" as P1Water order 7 #lightblue
+
+Home -> Controller : Updates to schedule
+note right
+    The schedule is maintained on the central server.
+    The controller fetches the schedule at registration
+    or at regular check-ins.
+    The central server also pushes updates to the controller.
+end note
+
+... delay until scheduled event...
+Controller ->> A2Driver : pump on event\nwith duration
+A2Driver ->> P1Water : pump on
+
+note left
+At the predetermined time, the controller 
+instructs the driver to turn on the pump 
+for the specified duration
+end note
+
+activate P1Water
+... wait for timeout...
+A2Driver ->> P1Water : pump off
+note left : The driver turns off the\npump after the delay
+deactivate P1Water
+
+@enduml
