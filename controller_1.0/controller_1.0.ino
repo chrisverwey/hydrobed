@@ -50,7 +50,7 @@ NTPClient timeClient(UDP, "ntp.is.co.za", 7200, 86400000); // 24h refresh
 void info(String s) { if (SERIALDEBUG && DEBUGLEVEL>=0) Serial.println("INFO : "+s); }
 void debug(String s) { if (SERIALDEBUG && DEBUGLEVEL>=1) Serial.println("DEBUG : "+s); }
 void trace(String s) { if (SERIALDEBUG && DEBUGLEVEL>=2) Serial.println("TRACE : "+s); }
-
+void error(String s) { Serial.println("ERROR : "+s); }
 
 const char* ssid = STASSID;
 const char* password = STAPSK;
@@ -96,7 +96,7 @@ WiFiServer server(80);
 void setup() {
   if (SERIALDEBUG) 
     Serial.begin(115200);           // Enable serial monitor
-    
+  info("\n\n");
   pinMode(LED_BUILTIN, OUTPUT);  
   pinMode(LED_BUILTIN, HIGH);       // Turn off LED to save power
   connectToWiFi();
@@ -203,30 +203,30 @@ boolean isScheduleOutOfDate() {
 // ---------------------------------------------------
 void setupOTA() {
   ArduinoOTA.onStart([]() {
-      Serial.println ("Starting OTA");
+      info("Starting OTA");
   });
   
   ArduinoOTA.onEnd([] {
-      Serial.println ("Done with OTA");
+      info("Done with OTA");
   });
   
   ArduinoOTA.onProgress([] (unsigned int progress, unsigned int total) {
-      Serial.printf("Progress: %u%%\n", (progress / (total / 100)));
+      info("Progress: "+String(progress / (total / 100))+"%");
   });
   
-  ArduinoOTA.onError([] (ota_error_t error) {
-    Serial.printf("Error[%u]: ", error);
-    if (error == OTA_AUTH_ERROR) Serial.println ("Auth failed");
-    else if (error == OTA_BEGIN_ERROR) Serial.println ("Begin Failed");
-    else if (error == OTA_CONNECT_ERROR) Serial.println ("Connect Failed");
-    else if (error == OTA_RECEIVE_ERROR) Serial.println ("Recieve Failed");
-    else if (error == OTA_END_ERROR) Serial.println ("End Failed");  
+  ArduinoOTA.onError([] (ota_error_t err) {
+    Serial.printf("Error[%u]: ", err);
+    if (err == OTA_AUTH_ERROR) error ("Auth failed");
+    else if (err == OTA_BEGIN_ERROR) error ("Begin Failed");
+    else if (err == OTA_CONNECT_ERROR) error ("Connect Failed");
+    else if (err == OTA_RECEIVE_ERROR) error ("Recieve Failed");
+    else if (err == OTA_END_ERROR) error ("End Failed");  
   });
   
   ArduinoOTA.begin();
-  Serial.println ("Ready");
-  Serial.print ("IP address: ");
-  Serial.println (WiFi.localIP());
+  info("OTA Ready");
+  info("IP address: ");
+  info(WiFi.localIP().toString());
 }
 
 // ---------------------------------------------------
@@ -234,15 +234,14 @@ void setupOTA() {
 // ---------------------------------------------------
 void connectToWiFi() {
   // Connect to WiFi network
-  info("\n\nMac address:"+WiFi.macAddress());
-  info(F("Connecting"));
+  info("Mac address:"+WiFi.macAddress());
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
-    info(F("."));
+    info(F("Connecting"));
   }
   info(F("WiFi connected"));  
 //  IPAddress ip = WiFi.localIP(); 
