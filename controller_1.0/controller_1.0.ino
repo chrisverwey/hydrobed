@@ -47,7 +47,7 @@ WiFiUDP UDP;
 NTPClient timeClient(UDP, "ntp.is.co.za", 7200, 86400000); // 24h refresh
 
 
-void info(String s) { if (SERIALDEBUG && DEBUGLEVEL>=0) Serial.println("INFO : "+s); }
+void info(String s) { if (SERIALDEBUG && DEBUGLEVEL>=0)  Serial.println("INFO  : "+s); }
 void debug(String s) { if (SERIALDEBUG && DEBUGLEVEL>=1) Serial.println("DEBUG : "+s); }
 void trace(String s) { if (SERIALDEBUG && DEBUGLEVEL>=2) Serial.println("TRACE : "+s); }
 void error(String s) { Serial.println("ERROR : "+s); }
