@@ -26,6 +26,7 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
 #include <NTPClient.h>
+#include "structs.h"
 
 #define BOARDTYPE "HYDROFARM_v1"
 #define SERIALDEBUG true
@@ -38,6 +39,7 @@
 #endif
 
 WiFiUDP UDP;
+DynamicJsonDocument doc(3072);
 
 // https://github.com/arduino-libraries/NTPClient
 // https://randomnerdtutorials.com/esp8266-nodemcu-date-time-ntp-client-server-arduino/
@@ -55,43 +57,16 @@ void trace(String s) { if (SERIALDEBUG && DEBUGLEVEL>=2) Serial.println("TRACE :
 void errorlog(String s) { Serial.println("ERROR : "+s); }
 
 
-// ---------------------------------------------------
-// ----------------- Main data structs ---------------
-// ---------------------------------------------------
-typedef struct {
-  int activation_id;
-  tm start_time;
-  byte duration; 
-} t_Activation;
-
-typedef struct {
-  int pin_id;
-  int pin_number;
-  int pin_type;
-  int alert_high;
-  int alert_low;
-  int warn_high;
-  int warn_low;
-  int schedule_count=-1;
-  t_Activation schedule[] = {};
-} t_Pin;
-
-typedef struct {
-  int driver_id;
-  int i2c_port;
-  int schedule_read_freq = 600;
-  int pin_count = -1;
-  t_Pin *pins ;
-} t_Driver;
 
 int controller_id = NULL;
 long checkin_delay = 60;
 long checkin_countdown = 60;
-tm schedule_time ;
 
 int driver_count = -1;
-t_Driver *driver;
+t_Driver driver[MAXDRIVERS];
 bool missingpins = true;
+time_t latest_schedule_read;
+
 // ---------------------------------------------------
 // ----------------- Arduino core methods ------------
 // ---------------------------------------------------
@@ -127,11 +102,17 @@ void loop() {
   if (WiFi.status() != WL_CONNECTED) {
     WiFi.begin(ssid, password);
   }
+
+  // Do this every second
   if (timeClient.getSeconds()!=previousSecond) {
     previousSecond = timeClient.getSeconds();
 
-    if (driver_count<0) webDownloadDriverConfig();
+    // if our driver dl failed previously, retry
+    // if driver succeeded, but any pins failed, retry
+    if (driver_count<0) webDownloadDriverConfig(); 
     if (driver_count>0 && missingpins) webDownloadPinConfig();
+    
+    // decrement any timers and check if they are 0
     trace("Timer checkin_countdown:"+String(checkin_countdown));
     if (countdownTimer(checkin_countdown, checkin_delay)) webCheckinWithHome();
 
@@ -139,6 +120,8 @@ void loop() {
     //struct tm *ptm = gmtime ((time_t *)&epochTime );
     //trace(String(1900+ptm->tm_year)+"/"+String(ptm->tm_mon+1)+"/"+String(ptm->tm_mday)+" "+String(ptm->tm_hour)+":"+String(ptm->tm_min)+":"+String(ptm->tm_sec));
   }
+
+  
   ArduinoOTA.handle();
   WiFiClient client = server.available();
 //  if (client) 
@@ -187,17 +170,17 @@ boolean countdownTimer(long &timer, long resetvalue) {
  * The recordsets bit needs to be extracted so that the main payload can be used.
  */
 String stripJSONresultset (String resultset) {
-  StaticJsonDocument<2048> aDoc; // incoming document
-  DeserializationError error = deserializeJson(aDoc, resultset);
-  debug("stripJSONresultset:aDoc="+String(aDoc.memoryUsage()));
+//  StaticJsonDocument<2048> aDoc; // incoming document
+  DeserializationError error = deserializeJson(doc, resultset);
+  trace("stripJSONresultset:aDoc="+String(doc.memoryUsage()));
   if (error) {
-    info(F("deserializeJson() failed: "));
-    info(error.f_str());
+    errorlog(F("deserializeJson() failed: "));
+    errorlog(error.f_str());
     //webLogMessage(3, "Register:updateOurSettings() failed="+String(error.f_str())+":"+payload);
     return "";
   }
   // 
-  String subDocString = aDoc["recordsets"][0][0];
+  String subDocString = doc["recordsets"][0][0];
   return subDocString;
 }
 
@@ -205,7 +188,7 @@ String stripJSONresultset (String resultset) {
  *  TODO: calculate whether our schedule timestamp is the same as 
  *  the one from the server.
  */
-boolean isScheduleOutOfDate() {
+boolean isScheduleOutOfDate(time_t last_schedule) {
   return true;
 }
 
@@ -214,15 +197,17 @@ boolean isScheduleOutOfDate() {
  * into a tm structure.
  *  http://www.cplusplus.com/reference/ctime/tm/
  */
-void parseDateTime(tm &datetime, String s) {
+time_t parseDateTime(String s) {
+    tm tmptime;
     //2021-02-10T12:34:56.000Z"
     trace("updateOurSettings:schedule received="+s);
-    datetime.tm_mday = s.substring(8,10).toInt();
-    datetime.tm_mon  = s.substring(5,7).toInt()-1;
-    datetime.tm_year = s.substring(0,4).toInt()-1900;
-    datetime.tm_hour = s.substring(11,13).toInt();
-    datetime.tm_min  = s.substring(14,16).toInt();
-    datetime.tm_sec  = s.substring(17,19).toInt();
+    tmptime.tm_mday = s.substring(8,10).toInt();
+    tmptime.tm_mon  = s.substring(5,7).toInt()-1;
+    tmptime.tm_year = s.substring(0,4).toInt()-1900;
+    tmptime.tm_hour = s.substring(11,13).toInt();
+    tmptime.tm_min  = s.substring(14,16).toInt();
+    tmptime.tm_sec  = s.substring(17,19).toInt();
+    return mktime(&tmptime);
 }
 
 // ---------------------------------------------------
@@ -353,7 +338,7 @@ void webSendLoggingMessage(int loglevel, String message) {
   HTTPClient client;
   info("Sending ("+String(loglevel)+") message home : "+message);
   webSendHeaders(client, "/logmessage");
-  StaticJsonDocument<128> doc;
+//  StaticJsonDocument<128> doc;
   doc["controller"]=controller_id;
   doc["priority"]=loglevel;
   doc["message"]=message;
@@ -370,22 +355,26 @@ void webSendLoggingMessage(int loglevel, String message) {
  * main server registration (both from setup, and periodially from
  * loop).
  */
-void updateOurSettings(String payload) {
+time_t updateOurSettings(String payload) {
   String data = stripJSONresultset(payload);
-  StaticJsonDocument<156> doc;
+//  StaticJsonDocument<156> doc;
   
   DeserializationError error2 = deserializeJson(doc, data);
-  debug("updateOurSettings:doc="+String(doc.memoryUsage()));
+  trace("updateOurSettings:doc="+String(doc.memoryUsage()));
 
   int save_controller_id = controller_id;
   int save_checkin_delay = checkin_delay;
 
   controller_id = doc["controller_id"];
   checkin_delay = doc["checkin_delay"];
-  String schedule = doc["schedule_time"];
-  if (schedule.length()>4) { //2021-02-10T12:34:56.000Z"
-    parseDateTime(schedule_time, schedule);
-  }
+
+// Convert this to return from the function:
+//  String schedule = doc["schedule_time"];
+//  if (schedule.length()>4) { //2021-02-10T12:34:56.000Z"
+//  // TODO This doesn't seem right. We should compare shedule to schedult_time and if we are older, update the schedule.
+//    schedule_time = parseDateTime(schedule);
+//  }
+
   // Protect if server is offline and we get empty data back.
   if (controller_id == 0) controller_id = save_controller_id;
   if (checkin_delay == 0) checkin_delay = save_checkin_delay;
@@ -394,10 +383,9 @@ void updateOurSettings(String payload) {
     info("updateOurSettings:Checkin delay invalid. Forcing it to 60"); 
     checkin_delay=60;
   } 
-   char buffer [80];
-   strftime (buffer,80,"%F %T",&schedule_time);
-
-  debug("updateOurSettings:Setting values controller_id="+String(controller_id)+" checkin_delay="+String(checkin_delay)+" schedule="+buffer);
+  
+  debug("updateOurSettings:Setting values controller_id="+String(controller_id)+" checkin_delay="+String(checkin_delay));
+  return NULL;
 }
 
 /*
@@ -410,7 +398,7 @@ void webRegisterWithHome() {
   webSendHeaders(client, "/controller");
 
   unsigned long mint = millis() / 1000;
-  StaticJsonDocument<64> doc;
+//  StaticJsonDocument<64> doc;
   doc["mac_address"] = WiFi.macAddress();
   doc["uptime"] = (int) mint;
 
@@ -422,38 +410,8 @@ void webRegisterWithHome() {
   String payload = client.getString();
   
   debug("webRegisterWithHome:Web Response:"+payload);
-  updateOurSettings(payload);
+  time_t ignore_first_setup = updateOurSettings(payload);
   
-  client.end();
-}
-
-/*
- * Periodically called from main loop to check in with the
- * central server to report our uptime, and to check whether
- * there is a newer version of the schedule that we don't have.
- */
-void webCheckinWithHome() {
-  HTTPClient client;
-  info("webCheckinWithHome:Check in with home periodically");
-  webSendHeaders(client, "/controller");
-
-  unsigned long mint = millis() / 1000;
-  StaticJsonDocument<64> doc;
-  doc["mac_address"] = WiFi.macAddress();
-  doc["uptime"] = (int) mint;
-
-  String sendString = "";
-  serializeJson(doc, sendString);
-  debug("webCheckinWithHome:Web Request:"+sendString);
-    
-  int err = client.POST(sendString);
-  String payload = client.getString();
-  
-  debug("webCheckinWithHome:Web Response:"+payload);
-  updateOurSettings(payload);
-  if (controller_id != NULL && isScheduleOutOfDate()) {
-    webRefreshSchedule(); 
-  }
   client.end();
 }
 
@@ -467,7 +425,7 @@ void webDownloadDriverConfig() {
   if (err==200) {
     String payload = client.getString();
     debug("webDownloadDriverConfig:Web Response:"+payload);
-    StaticJsonDocument<512> doc;
+//    StaticJsonDocument<512> doc;
     
     DeserializationError error = deserializeJson(doc, payload);
     
@@ -475,21 +433,14 @@ void webDownloadDriverConfig() {
       errorlog(F("webDownloadDriverConfig:deserializeJson() failed: "));
       errorlog(error.f_str());
     } else {
-
-     driver = (t_Driver *) malloc(sizeof(t_Driver)*doc.size());
-     if (driver) { // malloc succeeded
-        driver_count = doc["rowsAffected"][0];
-        trace ("Driver_Count = "+String(driver_count)); // todo
-        int counter = 0;
-        for (JsonObject elem : doc["recordsets"][0].as<JsonArray>()) {
-          driver[counter].driver_id          = elem["driver_id"]; // 1, 2
-          driver[counter].i2c_port           = elem["i2c_port"]; // 1, 69
-          driver[counter].schedule_read_freq = elem["schedule_read_freq"]; // 600, 300
-          driver[counter].pin_count          = -1; // not yet updated
-          counter++;
-        }
-      }  else {
-        errorlog("webDownloadDriverConfig:malloc error"); // TODO malloc error handling
+      driver_count = doc["rowsAffected"][0];
+      trace ("Driver_Count = "+String(driver_count)); // todo
+      int counter = 0;
+      for (JsonObject elem : doc["recordsets"][0].as<JsonArray>()) {
+        driver[counter].driver_id          = elem["driver_id"]; // 1, 2
+        driver[counter].i2c_port           = elem["i2c_port"]; // 1, 69
+        driver[counter].schedule_read_freq = elem["schedule_read_freq"]; // 600, 300
+        counter++;
       }
     }
   } else debug ("webDownloadDriverConfig:http error "+String(err)+" getting schedule"); 
@@ -503,7 +454,6 @@ void webDownloadPinConfig() {
   missingpins = false;
   info("webDownloadPinConfig:Downloading pin details...");
   
-  DynamicJsonDocument doc(3072);
   for (int t=0; t<driver_count; t++) {
     trace("Checking driver board "+String(t)+" having pin count "+String(driver[t].pin_count));
   
@@ -522,25 +472,18 @@ void webDownloadPinConfig() {
           errorlog(error.f_str());
           missingpins=true;
         } else {
-    
-         driver[t].pins = (t_Pin *) malloc(sizeof(t_Pin)*doc.size());
-         if (driver[t].pins) { // malloc succeeded
-            driver[t].pin_count = doc["rowsAffected"][0];
-            int counter = 0;
-            for (JsonObject elem : doc["recordsets"][0].as<JsonArray>()) {
-              driver[t].pins[counter].pin_id     = elem["pin_id"]; // 1, 2, 3, 4, 5, 6, 7, 8, 9
-              driver[t].pins[counter].pin_number = elem["pin_number"]; // 5, 6, 7, 14, 15, 16, 17, 18, 19
-              driver[t].pins[counter].pin_type   = elem["pin_type"]; // 1, 1, 1, 2, 2, 2, 2, 2, 2
-              driver[t].pins[counter].alert_high = elem["alert_high"];
-              driver[t].pins[counter].alert_low  = elem["alert_low"];
-              driver[t].pins[counter].warn_high  = elem["warn_high"];
-              driver[t].pins[counter].warn_low   = elem["warn_low"];
-              counter++;
-              downloadPinSchedule(driver[t].pins[counter]);
-            }
-          } else {
-            missingpins = true;  // TODO malloc error handling
-            errorlog("webDownloadPinConfig:malloc error");
+          // TODO http error if count > max allowed
+          driver[t].pin_count = doc["rowsAffected"][0];
+          int counter = 0;
+          for (JsonObject elem : doc["recordsets"][0].as<JsonArray>()) {
+            driver[t].pins[counter].pin_id     = elem["pin_id"]; // 1, 2, 3, 4, 5, 6, 7, 8, 9
+            driver[t].pins[counter].pin_number = elem["pin_number"]; // 5, 6, 7, 14, 15, 16, 17, 18, 19
+            driver[t].pins[counter].pin_type   = elem["pin_type"]; // 1, 1, 1, 2, 2, 2, 2, 2, 2
+            driver[t].pins[counter].alert_high = elem["alert_high"];
+            driver[t].pins[counter].alert_low  = elem["alert_low"];
+            driver[t].pins[counter].warn_high  = elem["warn_high"];
+            driver[t].pins[counter].warn_low   = elem["warn_low"];
+            counter++;
           }
         }
       } else {
@@ -549,24 +492,86 @@ void webDownloadPinConfig() {
       }
       client.end();   
     }
+    if (!missingpins) downloadDriverSchedule(driver[t]);
+
   }
 }
 
-void downloadPinSchedule(t_Pin &pin) {
+void downloadDriverSchedule(t_Driver &driver) {
   // GET http://localhost:8081/pin/1/schedule
   HTTPClient client;
-  missingpins = false;
-  debug("webDownloadPinConfig:Updating pin schedule "+String(pin.pin_id));
-}
+  info("downloadDriverSchedule:Updating driver "+String(driver.driver_id) + " schedule");
+  for (int t=0; t<driver.pin_count; t++) {
+    webSendHeaders(client, "/pin/"+String(driver.pins[t].pin_id)+"/schedule");
+    int err = client.GET();
+    if (err==200) {
+//      DynamicJsonDocument doc(1536);
+      
+      String payload = client.getString();
+      debug("downloadDriverSchedule:Web Response:"+payload);
+      DeserializationError error = deserializeJson(doc, payload);
+      if (error) {
+        errorlog(F("downloadDriverSchedule:deserializeJson() failed: "));
+        errorlog(error.f_str());
+      } else {
+        int rows = doc["rowsAffected"][0];
+        driver.pins[t].schedule_count = rows;
 
+        int counter = 0;
+        for (JsonObject elem : doc["recordsets"][0].as<JsonArray>()) {
+          driver.pins[t].schedule[counter].activation_id = elem["activation_id"]; // 1, 2, 3, 4
+          driver.pins[t].schedule[counter].duration      = elem["duration"]; // 30, 30, 30, 30
+          tm tmptime;
+          strptime(elem["start_time"], "%Y-%m-%dT%H:%M:%S",&tmptime); // "1900-01-01T06:57:00.000Z"
+          driver.pins[t].schedule[counter].start_time = mktime(&tmptime);
+          strptime(elem["last_updated"], "%Y-%m-%dT%H:%M:%S",&tmptime);
+          time_t last_updated = mktime(&tmptime);
+          if (last_updated > latest_schedule_read) latest_schedule_read = last_updated;
+          counter++;
+        }
+      }
+    } else {
+      errorlog ("downloadDriverSchedule:http error "+String(err)+" getting driver schedule"); 
+    }
+    client.end();   
+  } 
+}
 /*
- * TODO : Download the drivers, pins and activations
- * and update our internal variables
+ * TODO : Get the updated schedule
  */
 void webRefreshSchedule() {
 
+}
 
+/*
+ * Periodically called from main loop to check in with the
+ * central server to report our uptime, and to check whether
+ * there is a newer version of the schedule that we don't have.
+ */
+void webCheckinWithHome() {
+  HTTPClient client;
+  info("webCheckinWithHome:Check in with home periodically");
+  webSendHeaders(client, "/controller");
 
+  unsigned long mint = millis() / 1000;
+//  StaticJsonDocument<64> doc;
+  doc["mac_address"] = WiFi.macAddress();
+  doc["uptime"] = (int) mint;
+
+  String sendString = "";
+  serializeJson(doc, sendString);
+  debug("webCheckinWithHome:Web Request:"+sendString);
+    
+  int err = client.POST(sendString);
+  String payload = client.getString();
+  client.end();
+  
+  debug("webCheckinWithHome:Web Response:"+payload);
+  time_t latest_schedule = updateOurSettings(payload);
+
+  if (isScheduleOutOfDate(latest_schedule)) {
+    webRefreshSchedule(); 
+  }
 }
 
 // ---------------------------------------------------

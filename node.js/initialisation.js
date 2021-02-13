@@ -45,11 +45,11 @@ app.post('/controller', urlencodedParser, function (req, res) {
 			'join driver on driver.controller_id = c.controller_id '+
 			'join pin on pin.driver_id = driver.driver_id '+
 			'join activation on activation.pin_id = pin.pin_id '+
+			'where mac_address=\''+ req.body.mac_address +'\' ' +
 			'group by c.controller_id, c.checkin_delay;'
 
         request.query(stringRequest, function(err, recordset) {
             if(err) console.log(err);
-//            res.end(recordset.recordset[0].JSON); // Result in JSON format
 			res.end(JSON.stringify(recordset));
 			var logging = new sql.Request();
 			var datetime = new moment(new Date());
@@ -68,9 +68,11 @@ app.post('/controller', urlencodedParser, function (req, res) {
 app.get('/controller/:controllerId/driver', function (req, res) {
     sql.connect(sqlConfig, function() {	
         var request = new sql.Request();
-        var stringRequest = 'select driver_id, i2c_port, schedule_read_freq ' +
+        var stringRequest = 'select d.driver_id, i2c_port, schedule_read_freq, count(p.pin_id) as pin_count ' +
 				'from driver d '+
-				'where controller_id = ' + req.params.controllerId;
+				'join pin p on p.driver_id = d.driver_id ' +
+				'where controller_id = ' + req.params.controllerId + ' ' + 
+				'group by d.driver_id, i2c_port, schedule_read_freq;'
     	console.log(stringRequest);
         request.query(stringRequest, function(err, recordset) {
             if(err) console.log(err);
@@ -96,9 +98,10 @@ app.get('/driver/:driverId/pin', function (req, res) {
 app.get('/pin/:pinId/schedule', function (req, res) {
     sql.connect(sqlConfig, function() {	
         var request = new sql.Request();
-        var stringRequest = 'select activation_id, start_time, duration, last_updated '+
-				'from activation '+
-				'where pin_id = '+req.params.pinId;
+        var stringRequest = 'select activation_id, start_time, duration, last_updated ' +
+		        'from pin p ' +
+		        'join activation a on a.pin_id = p.pin_id ' +
+		        'where p.pin_id = '+req.params.pinId;
     	console.log(stringRequest);
         request.query(stringRequest, function(err, recordset) {
             if(err) console.log(err);
