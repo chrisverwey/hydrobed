@@ -217,14 +217,14 @@ app.get('X/reading', function (req, res) {
     });
 })
 
-app.post('X/logmessage', urlencodedParser, function (req, res) {
+app.post('/logmessage', urlencodedParser, function (req, res) {
     sql.connect(sqlConfig, function() {	
         var request = new sql.Request();
         var stringRequest = 'insert into logmessage values (' + 
 				       req.body.controller + ',' +
         		'\'' + new Date().addHours(2).toISOString().replace(/Z/,'') + '\',	' +
         		       req.body.priority + ',' +
-        		'\'' + req.body.message + '\')';
+        		'\'' + req.body.message.replace(/\'/g,'"') + '\')';
         console.log(stringRequest);
         request.query(stringRequest, function(err, recordset) {
             if(err) console.log(err);

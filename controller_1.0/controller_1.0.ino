@@ -346,7 +346,7 @@ void webSendLoggingMessage(int loglevel, String message) {
   serializeJson(doc, sendString);
   int err = client.POST(sendString);
   String rsp = client.getString();
-  if (rsp!=NULL) info ("webLogMessage:error - unexpected reply during logging : "+rsp);
+  if (rsp!=NULL) errorlog ("webLogMessage:error - unexpected reply during logging : "+rsp);
   client.end();
 }
 
@@ -543,6 +543,45 @@ void webRefreshSchedule() {
 
 }
 
+void webLogCurrentConfig(int level) {
+  String logvalues = 
+    "settings={'controller':"       +String(controller_id)+","+
+     "'checkin_delay':"    +String(checkin_delay)+","+
+     "'checkin_countdown':"+String(checkin_countdown)+", 'drivers':[";
+  for (int d=0; d<driver_count; d++) {
+    if (d>0) logvalues = logvalues + ",";
+    logvalues = logvalues + "{" +
+        "'driver_id':"         + String(driver[d].driver_id)+","+
+        "'i2c_port':"          + String(driver[d].i2c_port)+","+
+        "'schedule_read_freq':"+ String(driver[d].schedule_read_freq)+","+
+        "'pins':[";
+    for(int p=0; p<driver[d].pin_count;p++) {
+        if (p>0) logvalues = logvalues + ",";
+        logvalues = logvalues + "{" + 
+        "'pin_id':"    + String(driver[d].pins[p].pin_id)+","+
+        "'pin_number':"+ String(driver[d].pins[p].pin_number)+","+
+        "'pin_type':"  + String(driver[d].pins[p].pin_type)+","+
+        "'alert_high':"+ String(driver[d].pins[p].alert_high)+","+
+        "'alert_low':" + String(driver[d].pins[p].alert_low)+","+
+        "'warn_high':" + String(driver[d].pins[p].warn_high)+","+
+        "'warn_low':"  + String(driver[d].pins[p].warn_low)+","+
+        "'schedule':["  ;
+      for (int a=0; a<driver[d].pins[p].schedule_count; a++) {
+        if (a>0) logvalues = logvalues + ",";
+        logvalues = logvalues + "{"+
+        "'activation_id':" + String(driver[d].pins[p].schedule[a].activation_id) +"," +
+        "'start_time':'"  + String("TIME HERE")+"'," +
+        "'duration':"      + String(driver[d].pins[p].schedule[a].duration) + "}";
+      }
+      logvalues = logvalues + "]}";
+    }
+    logvalues = logvalues + "]}";
+  }
+  logvalues = logvalues + "]}";
+
+  webSendLoggingMessage(level,logvalues);
+}
+
 /*
  * Periodically called from main loop to check in with the
  * central server to report our uptime, and to check whether
@@ -572,6 +611,8 @@ void webCheckinWithHome() {
   if (isScheduleOutOfDate(latest_schedule)) {
     webRefreshSchedule(); 
   }
+
+  webLogCurrentConfig(1); // INFO log our config to home
 }
 
 // ---------------------------------------------------
