@@ -1,0 +1,20 @@
+@startuml
+
+participant setup order 1
+participant "Central Server" as home order 99
+participant webRefreshSchedule order 3
+participant webRegisterWithHome order 4
+participant updateOurSettings order 5
+setup -> setup : connectToWiFi
+setup -> setup : setupOTA
+setup -> setup : enableWebServer
+setup -> webRegisterWithHome : 
+webRegisterWithHome -> home : post /controller?mac_address
+home --> webRegisterWithHome : controller settings
+webRegisterWithHome -> updateOurSettings : update controller settings
+
+setup -> setup : start NTP
+
+
+@enduml
+

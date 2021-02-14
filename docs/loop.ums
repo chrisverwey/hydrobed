@@ -1,0 +1,51 @@
+@startuml
+
+participant loop order 1
+participant "Central Server" as home order 99
+participant webDownloadDriverConfig order 2
+participant webDownloadPinConfig order 3
+participant downloadDriverSchedule order 4
+participant webCheckinWithHome order 5
+participant webRefreshSchedule order 6
+participant webSendHeaders order 88
+
+loop -> loop :  NTP.update();
+loop -> loop : if (WiFi != WL_CONNECTED) WiFi connect
+
+loop -> loop : every second
+activate loop
+
+loop -> webDownloadDriverConfig : if previous driver downloads failed 
+webDownloadDriverConfig -> webSendHeaders : GET /controller/n/driver
+activate webDownloadDriverConfig
+webDownloadDriverConfig -> home 
+home --> webDownloadDriverConfig : drivers config
+deactivate webDownloadDriverConfig
+
+loop -> webDownloadPinConfig : if previous pin downloads failed
+webDownloadPinConfig -> webSendHeaders : GET /driver/n/pin
+activate webDownloadPinConfig
+webDownloadPinConfig -> home 
+home --> webDownloadPinConfig : pin config
+webDownloadPinConfig -> downloadDriverSchedule
+downloadDriverSchedule -> webSendHeaders : GET /pin/n/schedule
+activate downloadDriverSchedule
+downloadDriverSchedule -> home 
+home -> downloadDriverSchedule : schedule details
+deactivate downloadDriverSchedule
+deactivate webDownloadPinConfig
+
+loop -> webCheckinWithHome :  if checkin_countdown = 0
+webCheckinWithHome -> webSendHeaders : /controller
+activate webCheckinWithHome
+webCheckinWithHome -> home : mac_address
+home --> webCheckinWithHome : controller settings
+webCheckinWithHome -X webRefreshSchedule : if schedule changed (not yet implemented)
+deactivate webCheckinWithHome
+deactivate loop
+  
+loop -> loop : OTA.handle();
+
+loop -> loop : handle Web Client
+@enduml
+
