@@ -16,9 +16,10 @@ CREATE TABLE controller (
 	name			VARCHAR(30) NOT NULL,
 	mac_address		VARCHAR(20) NOT NULL,
 	checkin_delay	NUMERIC(3) NOT NULL,
-	location		VARCHAR(30) NOT NULL
+	location		VARCHAR(30) NOT NULL,
+	last_updated    DATETIME NOT NULL
 );
-INSERT INTO controller VALUES ('HYDRO TEST BEDS', '40:F5:20:32:F7:3A',60,'-33.8813 18.5518');
+INSERT INTO controller VALUES ('HYDRO TEST BEDS', '40:F5:20:32:F7:3A',10,'-33.8813 18.5518','02/13/2021 21:54:00');
 
 CREATE TABLE driver (
 	driver_id		INTEGER IDENTITY (1,1) PRIMARY KEY,
@@ -32,8 +33,8 @@ CREATE TABLE driver (
 		REFERENCES controller(controller_id)
 );
 INSERT INTO driver VALUES 
-	(1,1,'MAIN','BACK YARD', 600),
-	(1,69,'POWER','BACK YARD',300);
+	(1,1,'MAIN','BACK YARD', 600), -- 10 minutes
+	(1,69,'POWER','BACK YARD',300); -- 5 minutes
 
 CREATE TABLE pin (
 	pin_id			INTEGER IDENTITY (1,1) PRIMARY KEY,
@@ -75,33 +76,33 @@ create table logmessage (
 );
 
 insert into logmessage values 
-		(1,'02/06/2021 23:01:00',1,'OK'),
-		(1,'02/06/2021 23:01:05',1,'OK'),
-		(1,'02/06/2021 23:01:10',1,'OK');
+		(1,'06/02/2021 23:01:00',1,'OK'),
+		(1,'06/02/2021 23:01:05',1,'OK'),
+		(1,'06/02/2021 23:01:10',1,'OK');
 
 create table activation (
 	activation_id	INTEGER IDENTITY (1,1) PRIMARY KEY,
 	pin_id			INTEGER NOT NULL,
 	start_time		DATETIME NOT NULL,
+	end_time		DATETIME NOT NULL,
 	duration		INTEGER NOT NULL,
-	last_updated	DATETIME NOT NULL,
 	CONSTRAINT	fk_pin_activation
 		FOREIGN KEY (pin_id)
 		REFERENCES pin(pin_id)
 );
 INSERT INTO activation VALUES 
-		(1,'06:57:00',30,'2021/01/01 10:00'),
-		(1,'06:55:00',30,'2021/01/01 10:00'),
-		(1,'15:00:00',30,'2021/01/01 10:00'),
-		(1,'15:02:00',30,'2021/02/10 10:00'),
-		(2,'06:57:00',30,'2021/01/01 10:00'),
-		(2,'06:55:00',30,'2021/01/01 10:00'),
-		(2,'15:00:00',30,'2021/01/01 10:00'),
-		(2,'15:02:00',30,'2021/02/10 10:00'),
-		(3,'06:57:00',30,'2021/01/01 10:00'),
-		(3,'06:55:00',30,'2021/01/01 10:00'),
-		(3,'15:00:00',30,'2021/01/01 10:00'),
-		(3,'15:02:00',30,'2021/02/10 10:00');
+		(1,'06:57:00','06:57:30',30),
+		(1,'06:55:00','06:55:30',30),
+		(1,'15:00:00','15:00:30',30),
+		(1,'15:02:00','15:02:30',30),
+		(2,'06:57:00','06:57:30',30),
+		(2,'06:55:00','06:55:30',30),
+		(2,'15:00:00','15:00:30',30),
+		(2,'15:02:00','15:02:30',30),
+		(3,'06:57:00','06:57:30',30),
+		(3,'06:55:00','06:55:30',30),
+		(3,'15:00:00','15:00:30',30),
+		(3,'15:02:00','15:02:30',30);
 
 create table reading (
     reading_id      INTEGER IDENTITY (1,1) PRIMARY KEY,

@@ -40,13 +40,9 @@ app.post('/controller', urlencodedParser, function (req, res) {
         var request = new sql.Request();
         var stringRequest = 'select c.controller_id, '+
         	'c.checkin_delay, '+
-        	'max(activation.last_updated) as schedule_time '+
+        	'c.last_updated as schedule_time '+
 			'from controller C '+
-			'join driver on driver.controller_id = c.controller_id '+
-			'join pin on pin.driver_id = driver.driver_id '+
-			'join activation on activation.pin_id = pin.pin_id '+
-			'where mac_address=\''+ req.body.mac_address +'\' ' +
-			'group by c.controller_id, c.checkin_delay;'
+			'where mac_address=\''+ req.body.mac_address +'\' ';
 
         request.query(stringRequest, function(err, recordset) {
             if(err) console.log(err);
@@ -98,7 +94,7 @@ app.get('/driver/:driverId/pin', function (req, res) {
 app.get('/pin/:pinId/schedule', function (req, res) {
     sql.connect(sqlConfig, function() {	
         var request = new sql.Request();
-        var stringRequest = 'select activation_id, start_time, duration, last_updated ' +
+        var stringRequest = 'select activation_id, start_time, end_time, duration ' +
 		        'from pin p ' +
 		        'join activation a on a.pin_id = p.pin_id ' +
 		        'where p.pin_id = '+req.params.pinId;

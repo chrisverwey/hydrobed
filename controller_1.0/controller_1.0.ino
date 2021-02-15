@@ -51,16 +51,16 @@ const char* ssid = STASSID;
 const char* password = STAPSK;
 
 #define DEBUGLEVEL 1  // 0=INFO 1=DEBUG 2=TRACE
-void info(String s) { if (SERIALDEBUG && DEBUGLEVEL>=0)  Serial.println("INFO  : "+s); }
-void debug(String s) { if (SERIALDEBUG && DEBUGLEVEL>=1) Serial.println("DEBUG : "+s); }
-void trace(String s) { if (SERIALDEBUG && DEBUGLEVEL>=2) Serial.println("TRACE : "+s); }
-void errorlog(String s) { Serial.println("ERROR : "+s); }
+void info(String s) { if (SERIALDEBUG && DEBUGLEVEL>=0)  Serial.println("INFO  : "+s); Serial.flush();}
+void debug(String s) { if (SERIALDEBUG && DEBUGLEVEL>=1) Serial.println("DEBUG : "+s); Serial.flush();}
+void trace(String s) { if (SERIALDEBUG && DEBUGLEVEL>=2) Serial.println("TRACE : "+s); Serial.flush();}
+void errorlog(String s) { Serial.println("ERROR : "+s);  Serial.flush();}
 
 
 
 int controller_id = NULL;
-long checkin_delay = 60;
-long checkin_countdown = 60;
+long checkin_delay = 10;
+long checkin_countdown = 10;
 
 int driver_count = -1;
 t_Driver driver[MAXDRIVERS];
@@ -77,6 +77,7 @@ WiFiServer server(80);
  * Initialization 
  */
 void setup() {
+   trace("setup:start");
   if (SERIALDEBUG) 
     Serial.begin(115200);           // Enable serial monitor
   info("\n\n");
@@ -87,10 +88,13 @@ void setup() {
   
   enableWebServer();
   webRegisterWithHome();
-  webRefreshSchedule();
   
   timeClient.begin();
   info("Startup complete");
+  trace("validation");  
+//  treedump();
+  trace("setup:end");  
+  
 }
 
 /* 
@@ -110,8 +114,11 @@ void loop() {
     // if our driver dl failed previously, retry
     // if driver succeeded, but any pins failed, retry
     if (driver_count<0) webDownloadDriverConfig(); 
-    if (driver_count>0 && missingpins) webDownloadPinConfig();
-    
+    if (driver_count>0 && missingpins) {
+      webDownloadPinConfig();
+      if (!missingpins) webRefreshSchedule(); // initial schedule update
+    }
+
     // decrement any timers and check if they are 0
     trace("Timer checkin_countdown:"+String(checkin_countdown));
     if (countdownTimer(checkin_countdown, checkin_delay)) webCheckinWithHome();
@@ -147,6 +154,17 @@ void loop() {
 // ----------------- Utility methods -----------------
 // ---------------------------------------------------
 /*
+ * Use this during debugging to see what values are being
+ * stored in the device hierarchy.
+ */
+void treedump() {
+  for (int d=0;d<MAXDRIVERS;d++) 
+    for (int p=0;p<MAXPINS;p++)
+      for (int s=0;s<MAXSCHEDULES;s++)
+       debug("TREE_TEST: ("+String(d)+","+String(p)+","+String(s)+") "+String(driver[d].pins[p].schedule[s].activation_id));
+}
+
+/*
  * Utility method to count down the value of a timer
  * until it is zero, then reset it.
  * The timer value is passed by reference &timer so that
@@ -170,6 +188,7 @@ boolean countdownTimer(long &timer, long resetvalue) {
  * The recordsets bit needs to be extracted so that the main payload can be used.
  */
 String stripJSONresultset (String resultset) {
+  trace("stripJSONresultset:start");
 //  StaticJsonDocument<2048> aDoc; // incoming document
   DeserializationError error = deserializeJson(doc, resultset);
   trace("stripJSONresultset:aDoc="+String(doc.memoryUsage()));
@@ -181,32 +200,42 @@ String stripJSONresultset (String resultset) {
   }
   // 
   String subDocString = doc["recordsets"][0][0];
+  trace("stripJSONresultset:end");  
   return subDocString;
 }
 
 /* 
- *  TODO: calculate whether our schedule timestamp is the same as 
+ *  Calculates whether our schedule timestamp is older than
  *  the one from the server.
  */
 boolean isScheduleOutOfDate(time_t last_schedule) {
-  return true;
+  trace("isScheduleOutOfDate last_schedule="+String(last_schedule)+" latest_schedule_read="+String(latest_schedule_read));
+  if (last_schedule > latest_schedule_read) {
+    info("There is a newer schedule");
+    return true;
+  }
+  
+  return false;
 }
 
 /*
  * Utility function to parse a string date/time from JSON 
  * into a tm structure.
  *  http://www.cplusplus.com/reference/ctime/tm/
+ *  Caused by random reboots because of undiagnosed 
+ *  memory overwrites.
  */
 time_t parseDateTime(String s) {
+  trace("parseDateTime:start="+s);
     tm tmptime;
     //2021-02-10T12:34:56.000Z"
-    trace("updateOurSettings:schedule received="+s);
     tmptime.tm_mday = s.substring(8,10).toInt();
     tmptime.tm_mon  = s.substring(5,7).toInt()-1;
     tmptime.tm_year = s.substring(0,4).toInt()-1900;
     tmptime.tm_hour = s.substring(11,13).toInt();
     tmptime.tm_min  = s.substring(14,16).toInt();
     tmptime.tm_sec  = s.substring(17,19).toInt();
+  trace("parseDateTime:end="+String(mktime(&tmptime)));  
     return mktime(&tmptime);
 }
 
@@ -214,6 +243,7 @@ time_t parseDateTime(String s) {
 // ----------------- OTA Section ---------------------
 // ---------------------------------------------------
 void setupOTA() {
+  trace("setupOTA:start");
   ArduinoOTA.onStart([]() {
       info("Starting OTA");
   });
@@ -239,12 +269,14 @@ void setupOTA() {
   info("OTA Ready");
   info("IP address: ");
   info(WiFi.localIP().toString());
+  trace("setupOTA:end");  
 }
 
 // ---------------------------------------------------
 // ----------------- WiFi Section --------------------
 // ---------------------------------------------------
 void connectToWiFi() {
+  trace("connectToWiFi:start");
   // Connect to WiFi network
   info("Mac address:"+WiFi.macAddress());
 
@@ -258,15 +290,19 @@ void connectToWiFi() {
   info(F("WiFi connected"));  
 //  IPAddress ip = WiFi.localIP(); 
 //  info(ip.toString());
+  trace("connectToWiFi:end");
 }
 
 void enableWebServer() {
+  trace("enableWebServer:start");
   // Start the server
   server.begin();
   info(F("Server started"));
+  trace("enableWebServer:end");  
 }
 
 void webClientRequest(WiFiClient client) {
+  trace("webClientRequest:start");
     // Check if a client has connected
 
   client.setTimeout(5000); // default is 1000
@@ -309,6 +345,7 @@ void webClientRequest(WiFiClient client) {
   // when the function returns and 'client' object is destroyed (out-of-scope)
   // flush = ensure written data are received by the other side
   debug(F("Disconnecting from client"));
+  trace("webClientRequest:end");  
 }
 
 /*
@@ -320,10 +357,12 @@ void webClientRequest(WiFiClient client) {
  * url    = the http path to call e.g. /some/path/?with=variables
 */
 String webSendHeaders(HTTPClient &http, String url) {
+  trace("webSendHeaders:start "+url);
   String server = String(HOMESERVER);
   String port = String(HOMEPORT);
   http.begin("http://"+server+":"+port+url);
   http.addHeader("Content-Type", "application/json");
+  trace("webSendHeaders:end");  
 }
 
 /*
@@ -335,8 +374,9 @@ String webSendHeaders(HTTPClient &http, String url) {
  * e.g. checkSensors:The farm exploded!,driver=0x43, sensorpin=1, value=189234
  */
 void webSendLoggingMessage(int loglevel, String message) {
+  trace("webSendLoggingMessage:start");
   HTTPClient client;
-  info("Sending ("+String(loglevel)+") message home : "+message);
+  debug("webSendLoggingMessage:Sending (level "+String(loglevel)+") message home: "+message);
   webSendHeaders(client, "/logmessage");
 //  StaticJsonDocument<128> doc;
   doc["controller"]=controller_id;
@@ -346,8 +386,9 @@ void webSendLoggingMessage(int loglevel, String message) {
   serializeJson(doc, sendString);
   int err = client.POST(sendString);
   String rsp = client.getString();
-  if (rsp!=NULL) errorlog ("webLogMessage:error - unexpected reply during logging : "+rsp);
+  if (err!=200) errorlog ("webLogMessage:error - unexpected reply during logging : "+String(err));
   client.end();
+  trace("webSendLoggingMessage:end");  
 }
 
 /*
@@ -356,8 +397,9 @@ void webSendLoggingMessage(int loglevel, String message) {
  * loop).
  */
 time_t updateOurSettings(String payload) {
+  time_t returntime ;
+  trace("updateOurSettings:start");
   String data = stripJSONresultset(payload);
-//  StaticJsonDocument<156> doc;
   
   DeserializationError error2 = deserializeJson(doc, data);
   trace("updateOurSettings:doc="+String(doc.memoryUsage()));
@@ -369,11 +411,10 @@ time_t updateOurSettings(String payload) {
   checkin_delay = doc["checkin_delay"];
 
 // Convert this to return from the function:
-//  String schedule = doc["schedule_time"];
-//  if (schedule.length()>4) { //2021-02-10T12:34:56.000Z"
-//  // TODO This doesn't seem right. We should compare shedule to schedult_time and if we are older, update the schedule.
-//    schedule_time = parseDateTime(schedule);
-//  }
+  if (!doc["schedule_time"].isNull()) { //2021-02-10T12:34:56.000Z"
+    String schedule = doc["schedule_time"];
+    returntime = parseDateTime(schedule);
+  }
 
   // Protect if server is offline and we get empty data back.
   if (controller_id == 0) controller_id = save_controller_id;
@@ -385,7 +426,8 @@ time_t updateOurSettings(String payload) {
   } 
   
   debug("updateOurSettings:Setting values controller_id="+String(controller_id)+" checkin_delay="+String(checkin_delay));
-  return NULL;
+  trace("updateOurSettings:end");  
+  return returntime;
 }
 
 /*
@@ -393,6 +435,7 @@ time_t updateOurSettings(String payload) {
  * central server and to download our controller settings.
  */
 void webRegisterWithHome() {
+  trace("webRegisterWithHome:start");
   HTTPClient client;
   info("webRegisterWithHome:Register with home after startup");
   webSendHeaders(client, "/controller");
@@ -413,9 +456,11 @@ void webRegisterWithHome() {
   time_t ignore_first_setup = updateOurSettings(payload);
   
   client.end();
+  trace("webRegisterWithHome:end");  
 }
 
 void webDownloadDriverConfig() {
+  trace("webDownloadDriverConfig:start");
   // GET http://localhost:8081/controller/1/driver
   HTTPClient client;
 
@@ -446,15 +491,17 @@ void webDownloadDriverConfig() {
   } else debug ("webDownloadDriverConfig:http error "+String(err)+" getting schedule"); 
   
   client.end();  
+  trace("webDownloadDriverConfig:end");  
 }
 
 void webDownloadPinConfig() {
+  trace("webDownloadPinConfig:start");
   // GET http://localhost:8081/driver/1/pin
-  HTTPClient client;
   missingpins = false;
   info("webDownloadPinConfig:Downloading pin details...");
   
   for (int t=0; t<driver_count; t++) {
+    HTTPClient client;
     trace("Checking driver board "+String(t)+" having pin count "+String(driver[t].pin_count));
   
     if (driver[t].pin_count < 0) {
@@ -492,58 +539,85 @@ void webDownloadPinConfig() {
       }
       client.end();   
     }
-    if (!missingpins) downloadDriverSchedule(driver[t]);
-
+//    if (!missingpins) downloadDriverSchedule(driver[t]);
   }
+  trace("webDownloadPinConfig:end");  
 }
 
-void downloadDriverSchedule(t_Driver &driver) {
+boolean downloadDriverSchedule(int d) {
+  boolean successful = true;
+  
+  trace("downloadDriverSchedule:start");
   // GET http://localhost:8081/pin/1/schedule
-  HTTPClient client;
-  info("downloadDriverSchedule:Updating driver "+String(driver.driver_id) + " schedule");
-  for (int t=0; t<driver.pin_count; t++) {
-    webSendHeaders(client, "/pin/"+String(driver.pins[t].pin_id)+"/schedule");
+  info("downloadDriverSchedule:Updating driver "+String(driver[d].driver_id) + " schedule for " + driver[d].pin_count + " pins" );
+  for (int t=0; t<driver[d].pin_count; t++) {
+    HTTPClient client;
+    webSendHeaders(client, "/pin/"+String(driver[d].pins[t].pin_id)+"/schedule");
     int err = client.GET();
     if (err==200) {
-//      DynamicJsonDocument doc(1536);
-      
+
       String payload = client.getString();
       debug("downloadDriverSchedule:Web Response:"+payload);
       DeserializationError error = deserializeJson(doc, payload);
       if (error) {
         errorlog(F("downloadDriverSchedule:deserializeJson() failed: "));
         errorlog(error.f_str());
+        successful = false;
       } else {
         int rows = doc["rowsAffected"][0];
-        driver.pins[t].schedule_count = rows;
+        driver[d].pins[t].schedule_count = rows;
+        trace("downloadDriverSchedule:"+String(d)+","+String(t)+":"+rows);
 
         int counter = 0;
         for (JsonObject elem : doc["recordsets"][0].as<JsonArray>()) {
-          driver.pins[t].schedule[counter].activation_id = elem["activation_id"]; // 1, 2, 3, 4
-          driver.pins[t].schedule[counter].duration      = elem["duration"]; // 30, 30, 30, 30
-          tm tmptime;
-          strptime(elem["start_time"], "%Y-%m-%dT%H:%M:%S",&tmptime); // "1900-01-01T06:57:00.000Z"
-          driver.pins[t].schedule[counter].start_time = mktime(&tmptime);
-          strptime(elem["last_updated"], "%Y-%m-%dT%H:%M:%S",&tmptime);
-          time_t last_updated = mktime(&tmptime);
-          if (last_updated > latest_schedule_read) latest_schedule_read = last_updated;
+          driver[d].pins[t].schedule[counter].activation_id = elem["activation_id"]; // 1, 2, 3, 4
+          driver[d].pins[t].schedule[counter].duration      = elem["duration"]; // 30, 30, 30, 30
+          String d1 = elem["start_time"];
+          trace("elem('start_time']="+d1);
+          if (!elem["start_time"].isNull()) {  // null=4
+            driver[d].pins[t].schedule[counter].start_time = parseDateTime(elem["start_time"]);
+            trace("downloadDriverSchedule:start_time="+String(driver[d].pins[t].schedule[counter].start_time));
+          } else {
+            successful = false;
+            errorlog ("downloadDriverSchedule:Expected start_time, got "+d1);
+          }
+
+          String d2 = elem["end_time"];
+          trace("elem('end_time']="+d2);
+          if (!elem["end_time"].isNull()) {  // null=4
+            driver[d].pins[t].schedule[counter].end_time = parseDateTime(elem["end_time"]);
+            trace("downloadDriverSchedule:end_time="+String(driver[d].pins[t].schedule[counter].end_time));
+          } else {
+            errorlog ("downloadDriverSchedule:Expected end_time, got "+d2);
+            successful = false;
+          }
+//            
           counter++;
         }
       }
     } else {
+      successful = false;
       errorlog ("downloadDriverSchedule:http error "+String(err)+" getting driver schedule"); 
     }
     client.end();   
   } 
+  trace("downloadDriverSchedule:end="+String(successful));
+  return successful;
 }
 /*
  * TODO : Get the updated schedule
  */
-void webRefreshSchedule() {
-
+boolean webRefreshSchedule() {
+  bool completed = true;
+trace("webRefreshSchedule:start");
+  for (int d=0; d<driver_count; d++) 
+    completed = completed & downloadDriverSchedule(d);
+  trace("webRefreshSchedule:end="+String(completed));  
+  return completed;
 }
 
 void webLogCurrentConfig(int level) {
+  trace("webLogCurrentConfig:start");
   String logvalues = 
     "settings={'controller':"       +String(controller_id)+","+
      "'checkin_delay':"    +String(checkin_delay)+","+
@@ -580,6 +654,7 @@ void webLogCurrentConfig(int level) {
   logvalues = logvalues + "]}";
 
   webSendLoggingMessage(level,logvalues);
+  trace("webLogCurrentConfig:end");  
 }
 
 /*
@@ -588,12 +663,14 @@ void webLogCurrentConfig(int level) {
  * there is a newer version of the schedule that we don't have.
  */
 void webCheckinWithHome() {
+  trace("webCheckinWithHome:start");
   HTTPClient client;
   info("webCheckinWithHome:Check in with home periodically");
   webSendHeaders(client, "/controller");
 
   unsigned long mint = millis() / 1000;
 //  StaticJsonDocument<64> doc;
+  doc.clear();
   doc["mac_address"] = WiFi.macAddress();
   doc["uptime"] = (int) mint;
 
@@ -606,20 +683,26 @@ void webCheckinWithHome() {
   client.end();
   
   debug("webCheckinWithHome:Web Response:"+payload);
-  time_t latest_schedule = updateOurSettings(payload);
-
-  if (isScheduleOutOfDate(latest_schedule)) {
-    webRefreshSchedule(); 
+  time_t latest_schedule_available = updateOurSettings(payload);
+//  debug("webCheckinWithHome:latest_schedule_available="+String(lastest_schedule_available));
+  // treedump();
+  if (!missingpins && isScheduleOutOfDate(latest_schedule_available)) {
+    if (webRefreshSchedule()) {
+      trace("webCheckinWithHome updating latest_schedule_read="+String(latest_schedule_read)+" to latest_schedule_available="+String(latest_schedule_available));
+      latest_schedule_read = latest_schedule_available; 
+    // webLogCurrentConfig(1); // INFO log our config to home
+    }
   }
 
-  webLogCurrentConfig(1); // INFO log our config to home
+  trace("webCheckinWithHome:end");  
 }
 
 // ---------------------------------------------------
 // ----------------- I2C Section ---------------------
 // ---------------------------------------------------
 void i2c_setup() {
-  
+  trace("i2c_s:start");  
+  trace("i2c_s:end");  
 }
 
 // ---------------------------------------------------

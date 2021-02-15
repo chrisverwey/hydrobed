@@ -11,13 +11,14 @@
  */
 #define MAXDRIVERS 4
 #define MAXPINS 10
-#define MAXSCHEDULES 10
+#define MAXSCHEDULES 20
 // ---------------------------------------------------
 // ----------------- Main data structs ---------------
 // ---------------------------------------------------
 typedef struct {
   int activation_id;
   time_t start_time;
+  time_t end_time;
   byte duration; 
 } t_Activation;
 
@@ -36,7 +37,7 @@ typedef struct {
 typedef struct {
   int driver_id;
   int i2c_port;
-  int schedule_read_freq = 600;
+  int schedule_read_freq = 60;
   int pin_count = -1;
   t_Pin pins[MAXPINS] ;
 } t_Driver;
