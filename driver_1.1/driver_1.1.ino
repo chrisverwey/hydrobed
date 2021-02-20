@@ -23,7 +23,7 @@
 #include "DFRobot_INA219.h"
 
 #define SERIALDEBUG true
-#define DEBUGLEVEL 0
+#define DEBUGLEVEL 1
 // 0=INFO 1=DEBUG 2=TRACE
 DFRobot_INA219_IIC     ina219(&Wire, INA219_I2C_ADDRESS4);
 
@@ -34,16 +34,15 @@ void trace(String s) { if (SERIALDEBUG && DEBUGLEVEL>=2) Serial.println(s); }
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);  
   pinMode(LED_BUILTIN, HIGH);       // Turn off LED to save power
+  if (SERIALDEBUG) 
+    Serial.begin(115200);           // Enable serial monitor
   
   dEnablePins();
   aEnablePins();  
-  if (SERIALDEBUG) 
-    Serial.begin(115200);           // Enable serial monitor
 
   Wire.begin(1);                    // Broadcast on I2C channel & 
   Wire.onRequest(receiveData);      // set callback handlers
   Wire.onReceive(receiveRequest);
-  
 }
 
 // ---------------------------------------------------
@@ -153,15 +152,12 @@ void aReadAll() {
  * net sensor reading.
  */
 bool aTimeForReading() {
-  trace("aTimeForReading:start");
   aDecreaseTimer();
   
   if (readTimeout<1) {
-    trace("aTimeForReading:end:true");
     readTimeout = READ_DELAY;
     return true;
   } else {
-    trace("aTimeForReading:end:false");
     return false;
   }
 };
@@ -170,14 +166,8 @@ bool aTimeForReading() {
  * Count down the timer to when we do the next 
  * sensor reading.
  */
-uint8_t previousSecond = 0;
 void aDecreaseTimer() {
-  trace("aDecreaseTimer:start");
-  if (previousSecond!=second()) {
     readTimeout -= 1;
-    previousSecond=second();
-  }
-  trace("aDecreaseTimer:end");
 };
 
 
@@ -208,6 +198,7 @@ void dEnablePins() {
   trace("dEnablePins:start");
   for (int i=0; i<sizeof(dPins); i++) {
         pinMode(dPins[i], OUTPUT);  // Turn on digital pins
+        digitalWrite(dPins[i], HIGH);
   }  
   trace("dEnablePins:end");
 }
@@ -218,7 +209,8 @@ void dTurnPinOn(int pin, int duration) {
     if (dPins[i]==pin) {
       digitalWrite(pin, LOW);
       info("dTurnPinOn:Turning on pin_"+String(pin)+",duration_"+String(duration));
-      dPinDurationLeft[i]==duration;
+      dPinDurationLeft[i]=duration;
+      trace("duration now="+String(dPinDurationLeft[i]));
       dAreAnyPinsOn = true;
     }
   }
@@ -241,6 +233,7 @@ void dDecreaseTimers() {
   bool areAnyOn = false;
   
   for (int i=0; i<sizeof(dPins); i++) {
+    trace("dDecreaseTimers:Checking if pin "+String(dPins[i])+" is on : "+dPinDurationLeft[i]);
     if (dPinDurationLeft[i] > 0) {
       dPinDurationLeft[i]--;
       debug("dPinDurationLeft_"+String(i)+":"+String(dPinDurationLeft[i]));
@@ -252,7 +245,6 @@ void dDecreaseTimers() {
     }
   }
   dAreAnyPinsOn = areAnyOn;
-  trace("dDecreaseTimers:end");
 }
 
 // ---------------------------------------------------
@@ -262,14 +254,20 @@ uint8_t i2c_dpinno   = 0;
 uint8_t i2c_dpintime = 0;
 bool    i2c_command  = false;
 
+uint8_t previousSecond = 0;
 void loop() {
-//  
-//  Serial.println (analogRead(A0));
-//}
-//void x() {
-  trace("loop:start");
-  if (dAreAnyPinsOn) {
-     dDecreaseTimers();
+//  trace("loop:start");
+  int s = second();
+  if (previousSecond!=s) {
+    if (dAreAnyPinsOn) {
+       dDecreaseTimers();
+    }
+
+    if (aTimeForReading()) {
+      aReadAll();
+    }
+        
+    previousSecond=s;
   }
    
   // Check if we got an I2C command to handle
@@ -281,12 +279,8 @@ void loop() {
     i2c_command=false;
   }
 
-  if (aTimeForReading()) {
-    aReadAll();
-  }
-  
   delay(100);
-  trace("loop:end");
+//  trace("loop:end");
 }
 
 // ---------------------------------------------------
@@ -294,18 +288,19 @@ void loop() {
 // ---------------------------------------------------
 void receiveData (int16_t byteCount) {
   trace("receiveData:start");
-  if (!i2c_command) { // don't read if there already one in the queue
-    noInterrupts();
-    i2c_dpinno   = Wire.read();
-    i2c_dpintime = Wire.read();
-    i2c_command  = true;
-    interrupts();
-  }
+  i2c_sendSensorValues();
   trace("receiveData:end");
 }
 
 void receiveRequest() {
   trace("receiveRequest:start");
-  i2c_sendSensorValues();
+  if (!i2c_command) { // don't read if there already one in the queue
+    noInterrupts();
+    i2c_dpinno   = Wire.read();
+    i2c_dpintime = Wire.read();
+    i2c_command  = true;
+    trace("receiveRequest: got new request pin="+String(i2c_dpinno)+" duration="+String(i2c_dpintime));
+    interrupts();
+  }
   trace("receiveRequest:end");
 }

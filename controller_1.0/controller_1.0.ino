@@ -17,7 +17,7 @@
       e.g. 1,84.80,2,43.99 becomes {1,84,80,2,43,99} 
 **/
 #include <ESP8266WiFi.h>
-//#include <Wire.h>
+#include <Wire.h>
 
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
@@ -27,19 +27,20 @@
 #include <ESP8266HTTPClient.h>
 #include <NTPClient.h>
 #include "structs.h"
+#include "secrets.h"
 
 #define BOARDTYPE "HYDROFARM_v1"
 #define SERIALDEBUG true
-#define HOMESERVER "chris-mbp-3"
+
 #define HOMEPORT 8081
 
-#ifndef STASSID
-#define STASSID "WLAN300N"
-#define STAPSK  "ourhome1"
-#endif
+#define SDA_PIN 4
+#define SCL_PIN 5
+
+const char* ssid = STASSID;
+const char* password = STAPSK;
 
 WiFiUDP UDP;
-DynamicJsonDocument doc(3072);
 
 // https://github.com/arduino-libraries/NTPClient
 // https://randomnerdtutorials.com/esp8266-nodemcu-date-time-ntp-client-server-arduino/
@@ -47,16 +48,13 @@ DynamicJsonDocument doc(3072);
 // additionaly you can specify the update interval (in milliseconds).
 NTPClient timeClient(UDP, "ntp.is.co.za", 7200, 86400000); // 24h refresh
 
-const char* ssid = STASSID;
-const char* password = STAPSK;
-
 #define DEBUGLEVEL 1  // 0=INFO 1=DEBUG 2=TRACE
 void info(String s) { if (SERIALDEBUG && DEBUGLEVEL>=0)  Serial.println("INFO  : "+s); Serial.flush();}
 void debug(String s) { if (SERIALDEBUG && DEBUGLEVEL>=1) Serial.println("DEBUG : "+s); Serial.flush();}
 void trace(String s) { if (SERIALDEBUG && DEBUGLEVEL>=2) Serial.println("TRACE : "+s); Serial.flush();}
 void errorlog(String s) { Serial.println("ERROR : "+s);  Serial.flush();}
 
-
+DynamicJsonDocument doc(3072);
 
 int controller_id = NULL;
 long checkin_delay = 10;
@@ -88,6 +86,7 @@ void setup() {
   
   enableWebServer();
   webRegisterWithHome();
+  i2c_setup();
   
   timeClient.begin();
   info("Startup complete");
@@ -120,12 +119,10 @@ void loop() {
     }
 
     // decrement any timers and check if they are 0
-    trace("Timer checkin_countdown:"+String(checkin_countdown));
+//    trace("Timer checkin_countdown:"+String(checkin_countdown));
     if (countdownTimer(checkin_countdown, checkin_delay)) webCheckinWithHome();
 
-    //unsigned long epochTime = timeClient.getEpochTime();
-    //struct tm *ptm = gmtime ((time_t *)&epochTime );
-    //trace(String(1900+ptm->tm_year)+"/"+String(ptm->tm_mon+1)+"/"+String(ptm->tm_mday)+" "+String(ptm->tm_hour)+":"+String(ptm->tm_min)+":"+String(ptm->tm_sec));
+    scheduleCheck();
   }
 
   
@@ -214,7 +211,7 @@ boolean isScheduleOutOfDate(time_t last_schedule) {
     info("There is a newer schedule");
     return true;
   }
-  
+  info("Schedule is up to date");
   return false;
 }
 
@@ -479,7 +476,7 @@ void webDownloadDriverConfig() {
       errorlog(error.f_str());
     } else {
       driver_count = doc["rowsAffected"][0];
-      trace ("Driver_Count = "+String(driver_count)); // todo
+      trace ("Driver_Count = "+String(driver_count));
       int counter = 0;
       for (JsonObject elem : doc["recordsets"][0].as<JsonArray>()) {
         driver[counter].driver_id          = elem["driver_id"]; // 1, 2
@@ -608,8 +605,8 @@ boolean downloadDriverSchedule(int d) {
  * TODO : Get the updated schedule
  */
 boolean webRefreshSchedule() {
+  trace("webRefreshSchedule:start");
   bool completed = true;
-trace("webRefreshSchedule:start");
   for (int d=0; d<driver_count; d++) 
     completed = completed & downloadDriverSchedule(d);
   trace("webRefreshSchedule:end="+String(completed));  
@@ -702,13 +699,62 @@ void webCheckinWithHome() {
 // ---------------------------------------------------
 void i2c_setup() {
   trace("i2c_s:start");  
+  Wire.begin(SDA_PIN, SCL_PIN);
   trace("i2c_s:end");  
 }
 
+void i2c_send(int i2c_port, uint8_t pin, uint8_t duration) {
+  trace("i2c_send:start writing to port="+String(i2c_port)+" pin="+String(pin)+" duration="+duration);
+//  uint8_t buf[2] = { 0, 0}; // buffer
+//  buf[0]=pin;
+//  buf[1]=duration;
+  Wire.beginTransmission(i2c_port);
+  Wire.write(pin);
+  Wire.write(duration);
+  Wire.endTransmission();
+  trace("i2c_send:end");    
+}
 // ---------------------------------------------------
-// ----------------- Power monitor section -----------
+// ----------------- Schedule section ----------------
 // ---------------------------------------------------
+void scheduleCheck(){
+  time_t tNow = timeClient.getHours()   * 60 * 60
+              + timeClient.getMinutes() * 60
+              + timeClient.getSeconds();  //Hack
+  for (int d=0; d<driver_count; d++) 
+    for (int p=0; p<driver[d].pin_count; p++) {
+      bool mustBeOn = false;
+      bool isOn = driver[d].pins[p].switchedOn;
+      int duration = 0; 
+      
+      for (int s=0; s<driver[d].pins[p].schedule_count;s++) {
+        time_t tStart = driver[d].pins[p].schedule[s].start_time; 
+        time_t tEnd   = driver[d].pins[p].schedule[s].end_time; 
+        if (tNow >= tStart && tNow <= tEnd) {
+          mustBeOn = true;
+          duration = tEnd - tStart;
+        }
+      }
+      if (isOn && ! mustBeOn)
+        scheduleTurnOff(d,p);
+      else if (mustBeOn && ! isOn) {
+        scheduleTurnOn(d,p,duration);
+      }
+    }
+}
 
+void scheduleTurnOff (int d, int p) {
+  driver[d].pins[p].switchedOn = false;
+  info("Turning off pin "+String(p)+" on device "+String(d));
+}
+
+void scheduleTurnOn (int d, int p, int duration) {
+  int i2c = driver[d].i2c_port;
+  int pin = driver[d].pins[p].pin_number;
+  info("Turning on pin "+String(pin)+" on device "+String(d)+ " for "+String(duration)+" seconds");
+  i2c_send (i2c, pin , duration);
+  driver[d].pins[p].switchedOn = true;
+}
 // ---------------------------------------------------
 // ----------------- Power monitor section -----------
 // ---------------------------------------------------

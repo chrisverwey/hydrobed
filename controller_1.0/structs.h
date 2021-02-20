@@ -30,6 +30,7 @@ typedef struct {
   int alert_low;
   int warn_high;
   int warn_low;
+  boolean switchedOn=false;
   int schedule_count=-1;
   t_Activation schedule[MAXSCHEDULES];
 } t_Pin;

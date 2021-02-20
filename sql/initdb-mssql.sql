@@ -83,8 +83,8 @@ insert into logmessage values
 create table activation (
 	activation_id	INTEGER IDENTITY (1,1) PRIMARY KEY,
 	pin_id			INTEGER NOT NULL,
-	start_time		DATETIME NOT NULL,
-	end_time		DATETIME NOT NULL,
+	start_time		TIME NOT NULL,
+	end_time		TIME NOT NULL,
 	duration		INTEGER NOT NULL,
 	CONSTRAINT	fk_pin_activation
 		FOREIGN KEY (pin_id)

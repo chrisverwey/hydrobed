@@ -107,8 +107,6 @@ app.get('/pin/:pinId/schedule', function (req, res) {
 })
 
 
-
-
 app.get('X/controller/:controllerId/', function (req, res) {
     sql.connect(sqlConfig, function() {
         var request = new sql.Request();
