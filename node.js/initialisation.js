@@ -61,6 +61,38 @@ app.post('/controller', urlencodedParser, function (req, res) {
     });
 })
 
+app.post('/logmessage', urlencodedParser, function (req, res) {
+    sql.connect(sqlConfig, function() {	
+        var request = new sql.Request();
+        var stringRequest = 'insert into logmessage values (' + 
+				       req.body.controller + ',' +
+        		'\'' + new Date().addHours(2).toISOString().replace(/Z/,'') + '\',	' +
+        		       req.body.priority + ',' +
+        		'\'' + req.body.message.replace(/\'/g,'"') + '\')';
+        console.log(stringRequest);
+        request.query(stringRequest, function(err, recordset) {
+            if(err) console.log(err);
+            res.end(JSON.stringify(recordset)); // Result in JSON format
+        });
+    });
+})
+
+
+app.post('/sensor', urlencodedParser, function (req, res) {
+    sql.connect(sqlConfig, function() {	
+        var request = new sql.Request();
+        var stringRequest = 'insert into reading values (' + 
+				       req.body.pinId + ',' +
+        		'\'' + new Date().addHours(2).toISOString().replace(/Z/,'') + '\',	' +
+        		       req.body.value+')';
+//        console.log(stringRequest);
+        request.query(stringRequest, function(err, recordset) {
+            if(err) console.log(err);
+            res.end(JSON.stringify(recordset)); // Result in JSON format
+        });
+    });
+})
+
 app.get('/controller/:controllerId/driver', function (req, res) {
     sql.connect(sqlConfig, function() {	
         var request = new sql.Request();
@@ -204,22 +236,6 @@ app.get('X/reading', function (req, res) {
         var request = new sql.Request();
         var stringRequest = 'select * from reading';
     	console.log(stringRequest);
-        request.query(stringRequest, function(err, recordset) {
-            if(err) console.log(err);
-            res.end(JSON.stringify(recordset)); // Result in JSON format
-        });
-    });
-})
-
-app.post('/logmessage', urlencodedParser, function (req, res) {
-    sql.connect(sqlConfig, function() {	
-        var request = new sql.Request();
-        var stringRequest = 'insert into logmessage values (' + 
-				       req.body.controller + ',' +
-        		'\'' + new Date().addHours(2).toISOString().replace(/Z/,'') + '\',	' +
-        		       req.body.priority + ',' +
-        		'\'' + req.body.message.replace(/\'/g,'"') + '\')';
-        console.log(stringRequest);
         request.query(stringRequest, function(err, recordset) {
             if(err) console.log(err);
             res.end(JSON.stringify(recordset)); // Result in JSON format

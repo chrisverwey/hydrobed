@@ -23,7 +23,7 @@
 #include "DFRobot_INA219.h"
 
 #define SERIALDEBUG true
-#define DEBUGLEVEL 1
+#define DEBUGLEVEL 1  
 // 0=INFO 1=DEBUG 2=TRACE
 DFRobot_INA219_IIC     ina219(&Wire, INA219_I2C_ADDRESS4);
 

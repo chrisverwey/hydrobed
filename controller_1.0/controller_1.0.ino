@@ -110,18 +110,18 @@ void loop() {
   if (timeClient.getSeconds()!=previousSecond) {
     previousSecond = timeClient.getSeconds();
 
-    // if our driver dl failed previously, retry
-    // if driver succeeded, but any pins failed, retry
+    // if our driver config download failed previously, retry
     if (driver_count<0) webDownloadDriverConfig(); 
+    // if driver succeeded, but any pin config failed, retry those
     if (driver_count>0 && missingpins) {
       webDownloadPinConfig();
+    // Only once the config dl is done, get the schedule
       if (!missingpins) webRefreshSchedule(); // initial schedule update
     }
-
     // decrement any timers and check if they are 0
-//    trace("Timer checkin_countdown:"+String(checkin_countdown));
     if (countdownTimer(checkin_countdown, checkin_delay)) webCheckinWithHome();
 
+//    trace("Timer checkin_countdown:"+String(checkin_countdown));
     scheduleCheck();
   }
 
@@ -376,6 +376,7 @@ void webSendLoggingMessage(int loglevel, String message) {
   debug("webSendLoggingMessage:Sending (level "+String(loglevel)+") message home: "+message);
   webSendHeaders(client, "/logmessage");
 //  StaticJsonDocument<128> doc;
+  doc.clear();
   doc["controller"]=controller_id;
   doc["priority"]=loglevel;
   doc["message"]=message;
@@ -694,6 +695,36 @@ void webCheckinWithHome() {
   trace("webCheckinWithHome:end");  
 }
 
+void webSendSensorValues(int d, uint8_t buff[], int buffsize) {
+  trace("webSendLoggingMessage:start "+String(d)+" "+String(buffsize));
+  
+  for (int c=0; c<buffsize*3; c+=3) {
+      int pin=buff[c];
+      uint16_t value = (buff[c+1] << 8) + buff[c+2] ;
+      for (int p=0;p<driver[d].pin_count; p++) {
+        if (driver[d].pins[p].pin_number == buff[c]) {
+          debug("webSendSensorValues: pin="+String(pin)+" value="+String(value)+" "+String(c)+"<"+String(buffsize*3)+" "+String(p)+"<"+String(driver[d].pin_count));
+          HTTPClient client;
+          webSendHeaders(client, "/sensor");
+          doc.clear();
+          doc["controllerId"]=controller_id;
+          doc["driverId"]=driver[d].driver_id;
+          doc["pinId"]=driver[d].pins[p].pin_id;
+          doc["value"]=(float) value;      
+
+          String sendString = "";
+          serializeJson(doc, sendString);
+          debug("webSendSensorValues:"+sendString);
+          int err = client.POST(sendString);
+          String rsp = client.getString();
+          if (err!=200) errorlog ("webLogMessage:error - unexpected reply during logging : "+String(err));
+          client.end();
+        }
+      }
+  }
+  trace("webSendLoggingMessage:end");
+}
+
 // ---------------------------------------------------
 // ----------------- I2C Section ---------------------
 // ---------------------------------------------------
@@ -714,10 +745,40 @@ void i2c_send(int i2c_port, uint8_t pin, uint8_t duration) {
   Wire.endTransmission();
   trace("i2c_send:end");    
 }
+
+void i2c_read_sensors(int d) {
+  int i2c = driver[d].i2c_port;
+  int sensorcount = 0;
+
+  for (int p=0; p<driver[d].pin_count; p++)
+    if (driver[d].pins[p].pin_type==2) // sensor
+      sensorcount++;
+  trace("i2c_read_sensors:sensorcount="+String(sensorcount));
+  if (sensorcount>0) {
+    uint8_t buffer[sensorcount*3];
+    int b=0;
+    Wire.requestFrom(i2c, sensorcount*3);
+    
+    while (Wire.available()) { // slave may send less than requested
+      uint8_t v = Wire.read();
+      if (b<sensorcount*3)
+        buffer[b++] = v;// receive a byte as character
+      else
+        errorlog("i2c_read_sensors:i2c overread b="+String(b)+" value="+String (v));
+    }
+  
+    if (b<sensorcount*3)  // successful read
+      errorlog("i2c_read_sensors: received incomplete sensors b="+String(b)+" from driver "+String(d)+" pin "+i2c+" sensorcount "+String(sensorcount));
+    else {
+      debug("i2c_read_sensors:successful read sensors b="+String(b)+" from driver "+String(d)+" pin "+i2c+" sensorcount "+String(sensorcount));
+      webSendSensorValues(d, buffer, sensorcount);  
+    }
+  }
+}
 // ---------------------------------------------------
 // ----------------- Schedule section ----------------
 // ---------------------------------------------------
-void scheduleCheck(){
+void scheduleMotorCheck() {
   time_t tNow = timeClient.getHours()   * 60 * 60
               + timeClient.getMinutes() * 60
               + timeClient.getSeconds();  //Hack
@@ -740,7 +801,19 @@ void scheduleCheck(){
       else if (mustBeOn && ! isOn) {
         scheduleTurnOn(d,p,duration);
       }
-    }
+    }  
+}
+
+void scheduleSensorCheck() {
+  for (int d=0; d<driver_count; d++) 
+    if (countdownTimer(driver[d].schedule_read_countdown, driver[d].schedule_read_freq))
+      i2c_read_sensors(d);          
+}
+
+void scheduleCheck(){
+  scheduleMotorCheck();
+  if (!missingpins) // Sensor read countdown
+    scheduleSensorCheck(); 
 }
 
 void scheduleTurnOff (int d, int p) {
