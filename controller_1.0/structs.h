@@ -37,6 +37,7 @@ typedef struct {
 
 typedef struct {
   int driver_id;
+  int driver_type;
   int i2c_port;
   long schedule_read_freq = 60l;
   long schedule_read_countdown = 0l;

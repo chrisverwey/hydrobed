@@ -85,7 +85,7 @@ app.post('/sensor', urlencodedParser, function (req, res) {
 				       req.body.pinId + ',' +
         		'\'' + new Date().addHours(2).toISOString().replace(/Z/,'') + '\',	' +
         		       req.body.value+')';
-//        console.log(stringRequest);
+        console.log(stringRequest);
         request.query(stringRequest, function(err, recordset) {
             if(err) console.log(err);
             res.end(JSON.stringify(recordset)); // Result in JSON format
@@ -96,11 +96,11 @@ app.post('/sensor', urlencodedParser, function (req, res) {
 app.get('/controller/:controllerId/driver', function (req, res) {
     sql.connect(sqlConfig, function() {	
         var request = new sql.Request();
-        var stringRequest = 'select d.driver_id, i2c_port, schedule_read_freq, count(p.pin_id) as pin_count ' +
+        var stringRequest = 'select d.driver_id, driver_type, i2c_port, schedule_read_freq, count(p.pin_id) as pin_count ' +
 				'from driver d '+
 				'join pin p on p.driver_id = d.driver_id ' +
 				'where controller_id = ' + req.params.controllerId + ' ' + 
-				'group by d.driver_id, i2c_port, schedule_read_freq;'
+				'group by d.driver_id, driver_type, i2c_port, schedule_read_freq;'
     	console.log(stringRequest);
         request.query(stringRequest, function(err, recordset) {
             if(err) console.log(err);
@@ -137,127 +137,6 @@ app.get('/pin/:pinId/schedule', function (req, res) {
         });
     });
 })
-
-
-app.get('X/controller/:controllerId/', function (req, res) {
-    sql.connect(sqlConfig, function() {
-        var request = new sql.Request();
-        var stringRequest = 'select * from controller where controller_id = ' + req.params.controllerId;
-        console.log(stringRequest);
-        request.query(stringRequest, function(err, recordset) {
-            if(err) console.log(err);
-            res.end(JSON.stringify(recordset)); // Result in JSON format
-        });
-    });
-})
-
-app.get('X/driver/:driverId/', function (req, res) {
-    sql.connect(sqlConfig, function() {	
-        var request = new sql.Request();
-        var stringRequest = 'select * from driver d where d.driver_id = '+req.params.driverId;
-    	console.log(stringRequest);
-        request.query(stringRequest, function(err, recordset) {
-            if(err) console.log(err);
-            res.end(JSON.stringify(recordset)); // Result in JSON format
-        });
-    });
-})
-
-app.get('X/driver/:driverId/schedule', function (req, res) {
-    sql.connect(sqlConfig, function() {	
-        var request = new sql.Request();
-        var stringRequest = 'select pin_number, pin_type, activation.activation_id, start_time, duration '+
-			'from pin '+
-			'left join activation on activation.pin_id = pin.pin_id '+
-			'where pin.driver_id = '+req.params.driverId + ' ' +
-			'for json auto, WITHOUT_ARRAY_WRAPPER';
-    	console.log(stringRequest);
-        request.query(stringRequest, function(err, recordset) {
-            if(err) console.log(err);
-            res.end(JSON.stringify(recordset)); // Result in JSON format
-        });
-    });
-})
-
-app.get('X/pin/:pinId/', function (req, res) {
-    sql.connect(sqlConfig, function() {	
-        var request = new sql.Request();
-        var stringRequest = 'select * from pin where pin_id = ' + req.params.pinId;
-    	console.log(stringRequest);
-        request.query(stringRequest, function(err, recordset) {
-            if(err) console.log(err);
-            res.end(JSON.stringify(recordset)); // Result in JSON format
-        });
-    });
-})
-
-app.get('X/controller/:controllerId/logmessage', function (req, res) {
-    sql.connect(sqlConfig, function() {	
-        var request = new sql.Request();
-        var stringRequest = 'select * from logmessage where controller_id = ' + req.params.controllerId;
-    	console.log(stringRequest);
-        request.query(stringRequest, function(err, recordset) {
-            if(err) console.log(err);
-            res.end(JSON.stringify(recordset)); // Result in JSON format
-        });
-    });
-})
-
-app.get('X/pin/:pinId/activation', function (req, res) {
-    sql.connect(sqlConfig, function() {	
-        var request = new sql.Request();
-        var stringRequest = 'select * from activation a' + 
-        					' where a.pin_id = '  + req.params.pinId;
-        					;
-    	console.log(stringRequest);
-        request.query(stringRequest, function(err, recordset) {
-            if(err) console.log(err);
-            res.end(JSON.stringify(recordset)); // Result in JSON format
-        });
-    });
-})
-
-app.get('X/activation/:activationId/', function (req, res) {
-    sql.connect(sqlConfig, function() {	
-        var request = new sql.Request();
-        var stringRequest = 'select * from activation a' + 
-        					' where a.activation_id = '  + req.params.activationId;
-        					;
-    	console.log(stringRequest);
-        request.query(stringRequest, function(err, recordset) {
-            if(err) console.log(err);
-            res.end(JSON.stringify(recordset)); // Result in JSON format
-        });
-    });
-})
-
-app.get('X/reading', function (req, res) {
-    sql.connect(sqlConfig, function() {	
-        var request = new sql.Request();
-        var stringRequest = 'select * from reading';
-    	console.log(stringRequest);
-        request.query(stringRequest, function(err, recordset) {
-            if(err) console.log(err);
-            res.end(JSON.stringify(recordset)); // Result in JSON format
-        });
-    });
-})
-
-app.post('X/reading', urlencodedParser, function (req, res) {
-    sql.connect(sqlConfig, function() {	
-        var request = new sql.Request();
-        var stringRequest = 'insert into reading values (' + 
-				       req.body.pinid + ',' +
-        		'\'' + req.body.timestamp + '+GMT2\',' +
-        		       req.body.reading + ')';
-        console.log(stringRequest);
-        request.query(stringRequest, function(err, recordset) {
-            if(err) console.log(err);
-            res.end(JSON.stringify(recordset)); // Result in JSON format
-        });
-    });
-})
-
 
 // controller
 // 	get
@@ -300,26 +179,5 @@ app.post('X/reading', urlencodedParser, function (req, res) {
 // #	post
 // 	delete/?
 
-app.get('X/controller', function (req, res) {
-	console.log(req.body);
-    sql.connect(sqlConfig, function() {
-        var request = new sql.Request();
-        request.query('select * from controller', function(err, recordset) {
-            if(err) console.log(err);
-            res.end(JSON.stringify(recordset)); // Result in JSON format
-        });
-    });
-})
 
-app.get('X/logmessage/:logmessageId', function (req, res) {
-    sql.connect(sqlConfig, function() {	
-        var request = new sql.Request();
-        var stringRequest = 'select * from logmessage where logmessage_Id = ' + req.params.logmessageId;
-    	console.log(stringRequest);
-        request.query(stringRequest, function(err, recordset) {
-            if(err) console.log(err);
-            res.end(JSON.stringify(recordset)); // Result in JSON format
-        });
-    });
-})
 

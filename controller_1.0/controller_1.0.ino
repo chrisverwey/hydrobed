@@ -16,23 +16,20 @@
                   v is the value, left shifted 2 digits (e.g.12.34 transmits as 1234}
       e.g. 1,84.80,2,43.99 becomes {1,84,80,2,43,99} 
 **/
-#include <ESP8266WiFi.h>
-#include <Wire.h>
-
-#include <ESP8266mDNS.h>
-#include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 #include <ArduinoJson.h>
-#include <ESP8266WiFi.h>
+#include "DFRobot_INA219.h"
 #include <ESP8266HTTPClient.h>
+#include <ESP8266mDNS.h>
+#include <ESP8266WiFi.h>
 #include <NTPClient.h>
 #include "structs.h"
 #include "secrets.h"
+#include <WiFiUdp.h>
+#include <Wire.h>
 
 #define BOARDTYPE "HYDROFARM_v1"
 #define SERIALDEBUG true
-
-#define HOMEPORT 8081
 
 #define SDA_PIN 4
 #define SCL_PIN 5
@@ -48,7 +45,7 @@ WiFiUDP UDP;
 // additionaly you can specify the update interval (in milliseconds).
 NTPClient timeClient(UDP, "ntp.is.co.za", 7200, 86400000); // 24h refresh
 
-#define DEBUGLEVEL 1  // 0=INFO 1=DEBUG 2=TRACE
+#define DEBUGLEVEL 2  // 0=INFO 1=DEBUG 2=TRACE
 void info(String s) { if (SERIALDEBUG && DEBUGLEVEL>=0)  Serial.println("INFO  : "+s); Serial.flush();}
 void debug(String s) { if (SERIALDEBUG && DEBUGLEVEL>=1) Serial.println("DEBUG : "+s); Serial.flush();}
 void trace(String s) { if (SERIALDEBUG && DEBUGLEVEL>=2) Serial.println("TRACE : "+s); Serial.flush();}
@@ -75,7 +72,7 @@ WiFiServer server(80);
  * Initialization 
  */
 void setup() {
-   trace("setup:start");
+  trace("setup:start");
   if (SERIALDEBUG) 
     Serial.begin(115200);           // Enable serial monitor
   info("\n\n");
@@ -481,6 +478,7 @@ void webDownloadDriverConfig() {
       int counter = 0;
       for (JsonObject elem : doc["recordsets"][0].as<JsonArray>()) {
         driver[counter].driver_id          = elem["driver_id"]; // 1, 2
+        driver[counter].driver_type        = elem["driver_type"]; // 0, 1
         driver[counter].i2c_port           = elem["i2c_port"]; // 1, 69
         driver[counter].schedule_read_freq = elem["schedule_read_freq"]; // 600, 300
         counter++;
@@ -695,12 +693,23 @@ void webCheckinWithHome() {
   trace("webCheckinWithHome:end");  
 }
 
+/*
+ * Sends the sensor values over HTTP REST to the master server to 
+ * write into the database. The buffer contains sets of 3 bytes:
+ * 1 : pin number that the reading was taken from
+ * 2 : sensor reading high byte
+ * 3 : sensor reading low byte
+ * 
+ * These are converted to JSON and posted to the server.
+*/
 void webSendSensorValues(int d, uint8_t buff[], int buffsize) {
   trace("webSendLoggingMessage:start "+String(d)+" "+String(buffsize));
   
   for (int c=0; c<buffsize*3; c+=3) {
       int pin=buff[c];
-      uint16_t value = (buff[c+1] << 8) + buff[c+2] ;
+      uint16_t prevalue = (buff[c+1] << 8) + buff[c+2] ;
+      float value = (float) prevalue / (float) 100; 
+      trace("webSendSensorValues:"+String(pin)+":"+String(buff[c+1])+":"+String(buff[c+2])+":"+String(prevalue)+":"+String(value));
       for (int p=0;p<driver[d].pin_count; p++) {
         if (driver[d].pins[p].pin_number == buff[c]) {
           debug("webSendSensorValues: pin="+String(pin)+" value="+String(value)+" "+String(c)+"<"+String(buffsize*3)+" "+String(p)+"<"+String(driver[d].pin_count));
@@ -710,7 +719,7 @@ void webSendSensorValues(int d, uint8_t buff[], int buffsize) {
           doc["controllerId"]=controller_id;
           doc["driverId"]=driver[d].driver_id;
           doc["pinId"]=driver[d].pins[p].pin_id;
-          doc["value"]=(float) value;      
+          doc["value"]=value;      
 
           String sendString = "";
           serializeJson(doc, sendString);
@@ -749,10 +758,12 @@ void i2c_send(int i2c_port, uint8_t pin, uint8_t duration) {
 void i2c_read_sensors(int d) {
   int i2c = driver[d].i2c_port;
   int sensorcount = 0;
-
+  
+  // Count how many sensors are attached
   for (int p=0; p<driver[d].pin_count; p++)
     if (driver[d].pins[p].pin_type==2) // sensor
       sensorcount++;
+  
   trace("i2c_read_sensors:sensorcount="+String(sensorcount));
   if (sensorcount>0) {
     uint8_t buffer[sensorcount*3];
@@ -775,6 +786,7 @@ void i2c_read_sensors(int d) {
     }
   }
 }
+
 // ---------------------------------------------------
 // ----------------- Schedule section ----------------
 // ---------------------------------------------------
@@ -805,9 +817,15 @@ void scheduleMotorCheck() {
 }
 
 void scheduleSensorCheck() {
+  trace("scheduleSensorCheck:start");
+  
   for (int d=0; d<driver_count; d++) 
-    if (countdownTimer(driver[d].schedule_read_countdown, driver[d].schedule_read_freq))
-      i2c_read_sensors(d);          
+    if (countdownTimer(driver[d].schedule_read_countdown, driver[d].schedule_read_freq)) {
+      trace("scheduleSensorCheck:countdown reached for driver "+String(d)+" driver_type "+String(driver[d].driver_type));
+      if (driver[d].driver_type==1) i2c_read_sensors(d); // regular driver board
+      if (driver[d].driver_type==2) powerReadValues(d);   // Standard INA219 board
+    }
+  trace("scheduleSensorCheck:start");
 }
 
 void scheduleCheck(){
@@ -831,3 +849,38 @@ void scheduleTurnOn (int d, int p, int duration) {
 // ---------------------------------------------------
 // ----------------- Power monitor section -----------
 // ---------------------------------------------------
+/// https://github.com/DFRobot/DFRobot_INA219
+/// https://wiki.dfrobot.com/Gravity:%20I2C%20Digital%20Wattmeter%20SKU:%20SEN0291
+
+float ina219Reading_mA = 1000;
+float extMeterReading_mA = 1000;
+
+void powerReadValues(int d) {
+  trace("powerReadValues:start");
+  
+  DFRobot_INA219_IIC     ina219(&Wire, driver[d].i2c_port);
+  if (ina219.begin()) {
+    ina219.linearCalibrate(ina219Reading_mA, extMeterReading_mA);
+    uint8_t buffer[12]; // 4 readings * 3 bytes
+      
+    buffer[0]=1; // measurement 1
+    long bv = ina219.getBusVoltage_V() * 100;
+    buffer[1]=(bv >> 8) & 0xFF; // left sensor byte
+    buffer[2]= bv       & 0xFF; // right sensor byte  
+    buffer[3]=2; // measurement 2
+    long sv = ina219.getShuntVoltage_mV() * 100;
+    buffer[4]=(sv >> 8) & 0xFF; // left sensor byte
+    buffer[5]= sv       & 0xFF; // right sensor byte  
+    buffer[6]=3; // messurement 3
+    long curr = ina219.getCurrent_mA() * 100;
+    buffer[7]=(curr >> 8) & 0xFF; // left sensor byte
+    buffer[8]= curr       & 0xFF; // right sensor byte  
+    buffer[9]=4; //measurement 4
+    long pmw = ina219.getPower_mW() * 100;
+    buffer[10]=(pmw >> 8) & 0xFF; // left sensor byte
+    buffer[11]= pmw       & 0xFF; // right sensor byte  
+    trace("powerReadValues:bv="+String(bv)+" sv="+String(sv)+" curr="+String(curr)+" pmw="+String(pmw));
+    webSendSensorValues(d, buffer, 4);  
+  }
+  trace("powerReadValues:end");
+}

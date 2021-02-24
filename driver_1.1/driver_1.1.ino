@@ -20,12 +20,10 @@
 // Moisture sensor range test : 30 .. 650 (504 max under real world test)
 #include <Wire.h>
 #include <TimeLib.h>
-#include "DFRobot_INA219.h"
 
 #define SERIALDEBUG true
-#define DEBUGLEVEL 1  
+#define DEBUGLEVEL 2  
 // 0=INFO 1=DEBUG 2=TRACE
-DFRobot_INA219_IIC     ina219(&Wire, INA219_I2C_ADDRESS4);
 
 void info(String s) { if (SERIALDEBUG && DEBUGLEVEL>=0) Serial.println(s); }
 void debug(String s) { if (SERIALDEBUG && DEBUGLEVEL>=1) Serial.println(s); }
@@ -43,36 +41,6 @@ void setup() {
   Wire.begin(1);                    // Broadcast on I2C channel & 
   Wire.onRequest(receiveData);      // set callback handlers
   Wire.onReceive(receiveRequest);
-}
-
-// ---------------------------------------------------
-// ----------------- Power monitor section -----------
-// ---------------------------------------------------
-float ina219Reading_mA = 1000;
-float extMeterReading_mA = 1000;
-
-void pSetup() {
-     while(ina219.begin() != true) {
-        Serial.println("INA219 begin failed");
-        delay(2000);
-    }
-    ina219.linearCalibrate(ina219Reading_mA, extMeterReading_mA);
-}
-
-void pReadValues() {
-   Serial.print("BusVoltage:   ");
-    Serial.print(ina219.getBusVoltage_V(), 2);
-    Serial.println("V");
-    Serial.print("ShuntVoltage: ");
-    Serial.print(ina219.getShuntVoltage_mV(), 3);
-    Serial.println("mV");
-    Serial.print("Current:      ");
-    Serial.print(ina219.getCurrent_mA(), 1);
-    Serial.println("mA");
-    Serial.print("Power:        ");
-    Serial.print(ina219.getPower_mW(), 1);
-    Serial.println("mW");
-    Serial.println("");  
 }
 
 // ---------------------------------------------------
@@ -103,7 +71,11 @@ void aEnablePins() {
 /*
  * Read each sensor value ANALOG_READINGS times and
  * return the  average to avoid getting a 
- * fluctuating reading.
+ * fluctuating reading. 
+ * Since some sensors are float values, and we only 
+ * transfer int over i2c, we * 100 to get 2 decimal
+ * resolution. On controller side we / 100 to get 
+ * back to floats.
  */
 float getAnalogSensorValue(int PinNo) {
   trace("getAnalogSensorValue:start:"+String(PinNo));
@@ -114,6 +86,7 @@ float getAnalogSensorValue(int PinNo) {
     delay(1); 
   } 
   sensorValue = sensorValue/ANALOG_READINGS;
+  sensorValue = sensorValue * 100;
   
   trace("getAnalogSensorValue:end:"+String(sensorValue));
   return sensorValue; 
@@ -132,7 +105,7 @@ void aReadAll() {
   
   String debugString = "aReadAll";
   for (int i=0; i<sizeof(sensorpins); i++) {
-    pinvalue[i] = getAnalogSensorValue(sensorpins[i]);
+    pinvalue[i] = getAnalogSensorValue(sensorpins[i]); // float to int16
     debugString+=" pin"+String(sensorpins[i])+":"+String(pinvalue[i]);
   }
   debug(debugString);

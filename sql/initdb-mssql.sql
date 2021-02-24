@@ -24,7 +24,8 @@ INSERT INTO controller VALUES ('HYDRO TEST BEDS', '40:F5:20:32:F7:3A',10,'-33.88
 CREATE TABLE driver (
 	driver_id		INTEGER IDENTITY (1,1) PRIMARY KEY,
 	controller_id	INTEGER NOT NULL,
-    i2c_port INTEGER NOT NULL,
+	driver_type		INTEGER, -- 1=DRIVER, 2=INA219 (power sensor)
+    i2c_port 		INTEGER NOT NULL,
 	name			VARCHAR(20) NOT NULL,
 	location		VARCHAR(20) NOT NULL,
 	schedule_read_freq	INTEGER NOT NULL,
@@ -33,15 +34,15 @@ CREATE TABLE driver (
 		REFERENCES controller(controller_id)
 );
 INSERT INTO driver VALUES 
-	(1,1,'MAIN','BACK YARD', 600), -- 10 minutes
-	(1,69,'POWER','BACK YARD',300); -- 5 minutes
+	(1,1,1,'MAIN','BACK YARD', 600), -- 10 minutes
+	(1,2,69,'POWER','BACK YARD',60); -- 5 minutes (0x45)
 
 CREATE TABLE pin (
 	pin_id			INTEGER IDENTITY (1,1) PRIMARY KEY,
 	driver_id		INTEGER NOT NULL,
 	name			VARCHAR(30) NOT NULL,
 	pin_number		INTEGER NOT NULL,
-	pin_type		INTEGER NOT NULL,
+	pin_type		INTEGER NOT NULL, -- 1=motor, 2=sensor
 	alert_high		INTEGER,
 	alert_low		INTEGER,
 	warn_high		INTEGER,
@@ -60,9 +61,10 @@ INSERT INTO pin VALUES
     (1,'COARSE BED MOISTURE 2',17,2,NULL,NULL,NULL,NULL),
     (1,'SOIL BED MOISTURE 1'  ,18,2,NULL,NULL,NULL,NULL),
     (1,'SOIL BED MOISTURE 2'  ,19,2,NULL,NULL,NULL,NULL),
-    (2,'BATTERY VOLTS'     , 1,2,NULL,NULL,NULL,NULL),
-    (2,'BATTERY AMPS'      , 2,2,NULL,NULL,NULL,NULL),
-    (2,'BATTERY WATTS'     , 3,2,NULL,NULL,NULL,NULL);
+    (2,'BUS V'                , 1,2,NULL,NULL,NULL,NULL),
+    (2,'SHUNT mV'             , 2,2,NULL,NULL,NULL,NULL),
+    (2,'CURRENT mA'           , 3,2,NULL,NULL,NULL,NULL),
+    (2,'POWER mW'             , 4,2,NULL,NULL,NULL,NULL);
 
 create table logmessage (
 	logmessage_id	INTEGER IDENTITY (1,1) PRIMARY KEY,
