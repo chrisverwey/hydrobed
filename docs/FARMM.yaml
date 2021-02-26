@@ -1,0 +1,610 @@
+openapi: 3.0.2
+info:
+    title: FARMM
+    version: 1.0.0
+paths:
+    /controller/register:
+        post:
+            requestBody:
+                description: ''
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ControllerRegistrationRequest'
+                        examples:
+                            Sample request:
+                                value:
+                                    mac_address: '40:F5:20:32:F7:3A'
+                                    uptime: 1
+                required: true
+            tags:
+                - controller
+            responses:
+                '200':
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ControllerRegistrationResponse'
+                            examples:
+                                Example response:
+                                    value:
+                                        recordsets:
+                                            -
+                                                -
+                                                    controller_id: 1
+                                                    checkin_delay: 10
+                                                    schedule_time: '2021-02-23T21:32:13.013Z'
+                                        recordset:
+                                            -
+                                                controller_id: 1
+                                                checkin_delay: 10
+                                                schedule_time: '2021-02-23T21:32:13.013Z'
+                                        output: {}
+                                        rowsAffected:
+                                            - 1
+                    description: Request was received ok.
+            summary: Report in to the server to see if there are updates
+            description: >-
+                The controller reports in to the host with its MAC address according to a set frequency, to
+                get its settings from the host.
+    '/controller/{controllerId}/driver':
+        get:
+            tags:
+                - controller
+            parameters:
+                -
+                    examples:
+                        Example controller 1:
+                            value: '1'
+                    name: controllerId
+                    schema:
+                        type: integer
+                    in: path
+                    required: true
+            responses:
+                '200':
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DriverListResponse'
+                            examples:
+                                Example list of drivers:
+                                    value:
+                                        recordsets:
+                                            -
+                                                -
+                                                    driver_id: 1
+                                                    driver_type: 1
+                                                    i2c_port: 1
+                                                    schedule_read_freq: 600
+                                                    pin_count: 9
+                                                -
+                                                    driver_id: 2
+                                                    driver_type: 2
+                                                    i2c_port: 69
+                                                    schedule_read_freq: 600
+                                                    pin_count: 4
+                                        recordset:
+                                            -
+                                                driver_id: 1
+                                                driver_type: 1
+                                                i2c_port: 1
+                                                schedule_read_freq: 600
+                                                pin_count: 9
+                                            -
+                                                driver_id: 2
+                                                driver_type: 2
+                                                i2c_port: 69
+                                                schedule_read_freq: 600
+                                                pin_count: 4
+                                        output: {}
+                                        rowsAffected:
+                                            - 2
+                    description: The request was processed successfully.
+            summary: Gets the list of drivers attached to this controller
+    '/driver/{driverId}/pin':
+        get:
+            tags:
+                - driver
+            responses:
+                '200':
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PinListResponse'
+                            examples:
+                                Driver board pins example:
+                                    value:
+                                        recordsets:
+                                            -
+                                                -
+                                                    pin_id: 1
+                                                    pin_number: 5
+                                                    pin_type: 1
+                                                -
+                                                    pin_id: 2
+                                                    pin_number: 6
+                                                    pin_type: 1
+                                                -
+                                                    pin_id: 3
+                                                    pin_number: 7
+                                                    pin_type: 1
+                                        recordset:
+                                            -
+                                                pin_id: 1
+                                                pin_number: 5
+                                                pin_type: 1
+                                            -
+                                                pin_id: 2
+                                                pin_number: 6
+                                                pin_type: 1
+                                            -
+                                                pin_id: 3
+                                                pin_number: 7
+                                                pin_type: 1
+                                        output: {}
+                                        rowsAffected:
+                                            - 3
+                    description: Sucessful response with the pin settings.
+            summary: Gets the list of pins on this driver board
+        parameters:
+            -
+                examples:
+                    Example:
+                        value: '1'
+                name: driverId
+                description: The driver for which the pin definitions are being requested.
+                schema:
+                    type: integer
+                in: path
+                required: true
+    '/pin/{pinId}/schedule':
+        get:
+            tags:
+                - pin
+            responses:
+                '200':
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ActivationListResponse'
+                            examples:
+                                Activation schedule example:
+                                    value:
+                                        recordsets:
+                                            -
+                                                -
+                                                    activation_id: 1
+                                                    start_time: '1970-01-01T06:30:00.000Z'
+                                                    end_time: '1970-01-01T06:31:00.000Z'
+                                                -
+                                                    activation_id: 4
+                                                    start_time: '1970-01-01T12:30:00.000Z'
+                                                    end_time: '1970-01-01T12:31:00.000Z'
+                                                -
+                                                    activation_id: 5
+                                                    start_time: '1970-01-01T18:30:00.000Z'
+                                                    end_time: '1970-01-01T18:31:00.000Z'
+                                        recordset:
+                                            -
+                                                activation_id: 1
+                                                start_time: '1970-01-01T06:30:00.000Z'
+                                                end_time: '1970-01-01T06:31:00.000Z'
+                                            -
+                                                activation_id: 4
+                                                start_time: '1970-01-01T12:30:00.000Z'
+                                                end_time: '1970-01-01T12:31:00.000Z'
+                                            -
+                                                activation_id: 5
+                                                start_time: '1970-01-01T18:30:00.000Z'
+                                                end_time: '1970-01-01T18:31:00.000Z'
+                                        output: {}
+                                        rowsAffected:
+                                            - 3
+                    description: Successful response containing schedule activations
+            summary: Gets a list of activation times from this pin's schedule.
+        parameters:
+            -
+                examples:
+                    Example request:
+                        value: '1'
+                name: pinId
+                description: The pin for which the schedule is being requested
+                schema:
+                    type: integer
+                in: path
+                required: true
+    /logmessage:
+        post:
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/LogMessage'
+                        examples:
+                            Sample log message:
+                                value:
+                                    controller: 1
+                                    priority: 1
+                                    message: something profound
+                required: true
+            tags:
+                - logging
+            responses:
+                '200':
+                    description: Message successfully written
+            summary: Records logging information on the server
+    /sensor:
+        post:
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SensorReading'
+                        examples:
+                            Example:
+                                value:
+                                    pinId: 7
+                                    value: 120.43
+                required: true
+            tags:
+                - reading
+            responses:
+                '200':
+                    description: Sensor readings were updated successfully.
+            summary: Record a sensor reading to the server
+components:
+    schemas:
+        LogMessage:
+            title: Root Type for LogMessage
+            description: Used to log messages on the server
+            required:
+                - priority
+                - controller
+            type: object
+            properties:
+                controller:
+                    format: int32
+                    type: integer
+                priority:
+                    type: integer
+                message:
+                    type: string
+            example:
+                controller: 1
+                priority: 1
+                message: something profound
+        DriverListResponse:
+            title: Root Type for DriverListResponse
+            description: ''
+            type: object
+            properties:
+                recordsets:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Driver'
+                recordset:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Driver'
+                output:
+                    type: object
+                rowsAffected:
+                    type: array
+                    items:
+                        format: int32
+                        type: integer
+            example:
+                recordsets:
+                    -
+                        -
+                            driver_id: 1
+                            driver_type: 1
+                            i2c_port: 1
+                            schedule_read_freq: 600
+                            pin_count: 9
+                        -
+                            driver_id: 2
+                            driver_type: 2
+                            i2c_port: 69
+                            schedule_read_freq: 600
+                            pin_count: 4
+                recordset:
+                    -
+                        driver_id: 1
+                        driver_type: 1
+                        i2c_port: 1
+                        schedule_read_freq: 600
+                        pin_count: 9
+                    -
+                        driver_id: 2
+                        driver_type: 2
+                        i2c_port: 69
+                        schedule_read_freq: 600
+                        pin_count: 4
+                output: {}
+                rowsAffected:
+                    - 2
+        PinListResponse:
+            title: Root Type for PinListResponse
+            description: ''
+            type: object
+            properties:
+                recordsets:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Pin'
+                recordset:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Pin'
+                output:
+                    type: object
+                rowsAffected:
+                    type: array
+                    items:
+                        format: int32
+                        type: integer
+            example:
+                recordsets:
+                    -
+                        -
+                            pin_id: 10
+                            pin_number: 1
+                            pin_type: 2
+                        -
+                            pin_id: 11
+                            pin_number: 2
+                            pin_type: 2
+                        -
+                            pin_id: 12
+                            pin_number: 3
+                            pin_type: 2
+                        -
+                            pin_id: 13
+                            pin_number: 4
+                            pin_type: 2
+                recordset:
+                    -
+                        pin_id: 10
+                        pin_number: 1
+                        pin_type: 2
+                    -
+                        pin_id: 11
+                        pin_number: 2
+                        pin_type: 2
+                    -
+                        pin_id: 12
+                        pin_number: 3
+                        pin_type: 2
+                    -
+                        pin_id: 13
+                        pin_number: 4
+                        pin_type: 2
+                output: {}
+                rowsAffected:
+                    - 4
+        ActivationListResponse:
+            title: Root Type for ScheduleResponse
+            description: The schedule entries for activating a motor on a specified pin.
+            type: object
+            properties:
+                recordsets:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Activation'
+                recordset:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Activation'
+                output:
+                    type: object
+                rowsAffected:
+                    type: array
+                    items:
+                        format: int32
+                        type: integer
+            example:
+                recordsets:
+                    -
+                        -
+                            activation_id: 1
+                            start_time: '1970-01-01T06:30:00.000Z'
+                            end_time: '1970-01-01T06:31:00.000Z'
+                        -
+                            activation_id: 4
+                            start_time: '1970-01-01T12:30:00.000Z'
+                            end_time: '1970-01-01T12:31:00.000Z'
+                        -
+                            activation_id: 5
+                            start_time: '1970-01-01T18:30:00.000Z'
+                            end_time: '1970-01-01T18:31:00.000Z'
+                recordset:
+                    -
+                        activation_id: 1
+                        start_time: '1970-01-01T06:30:00.000Z'
+                        end_time: '1970-01-01T06:31:00.000Z'
+                    -
+                        activation_id: 4
+                        start_time: '1970-01-01T12:30:00.000Z'
+                        end_time: '1970-01-01T12:31:00.000Z'
+                    -
+                        activation_id: 5
+                        start_time: '1970-01-01T18:30:00.000Z'
+                        end_time: '1970-01-01T18:31:00.000Z'
+                output: {}
+                rowsAffected:
+                    - 3
+        ControllerRegistrationRequest:
+            title: Root Type for ControllerRegistration
+            description: Structure of the payload that the controller sends when registering with the server.
+            required:
+                - uptime
+            type: object
+            properties:
+                mac_address:
+                    description: >-
+                        MAC Address of the controller's WiFi. Used to uniquely identify the controller in the
+                        Controller table. 
+
+
+                        At the time of first registration, the controller will not know what its ControllerId
+                        is. The server uses the unique MAC address to return the controller's ControllerId.
+                    type: string
+                uptime:
+                    format: int32
+                    description: Duration that the controller has been running (uptime) in seconds.
+                    type: integer
+            example:
+                mac_address: '40:F5:20:32:F7:3A'
+                uptime: 1
+        ControllerRegistrationResponse:
+            title: Root Type for ControllerRegistrationResponse
+            description: >-
+                The information returned when a controller registers with the server. Contains the latest
+                settings for this controller.
+            type: object
+            properties:
+                recordsets:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ControllerRegistration'
+                recordset:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ControllerRegistration'
+                output:
+                    type: object
+                rowsAffected:
+                    type: array
+                    items:
+                        format: int32
+                        type: integer
+            example:
+                recordsets:
+                    -
+                        -
+                            controller_id: 1
+                            checkin_delay: 10
+                            schedule_time: '2021-02-26T13:28:51.893Z'
+                recordset:
+                    -
+                        controller_id: 1
+                        checkin_delay: 10
+                        schedule_time: '2021-02-26T13:28:51.893Z'
+                output: {}
+                rowsAffected:
+                    - 1
+        Activation:
+            title: Root Type for Activation
+            description: The start and end times to turn on a motor.
+            type: object
+            properties:
+                activation_id:
+                    format: int32
+                    type: integer
+                start_time:
+                    format: date-time
+                    type: string
+                end_time:
+                    format: date-time
+                    type: string
+            example:
+                activation_id: 5
+                start_time: '1970-01-01T18:30:00.000Z'
+                end_time: '1970-01-01T18:31:00.000Z'
+        ControllerRegistration:
+            title: Root Type for ControllerRegistration
+            description: The information about a controller
+            type: object
+            properties:
+                controller_id:
+                    format: int32
+                    type: integer
+                checkin_delay:
+                    format: int32
+                    type: integer
+                schedule_time:
+                    format: date-time
+                    type: string
+            example:
+                controller_id: 1
+                checkin_delay: 10
+                schedule_time: '2021-02-26T13:28:51.893Z'
+        Driver:
+            title: Root Type for Driver
+            description: ''
+            type: object
+            properties:
+                driver_id:
+                    format: int32
+                    type: integer
+                driver_type:
+                    format: int32
+                    type: integer
+                i2c_port:
+                    format: int32
+                    type: integer
+                schedule_read_freq:
+                    format: int32
+                    type: integer
+                pin_count:
+                    format: int32
+                    type: integer
+            example:
+                driver_id: 1
+                driver_type: 1
+                i2c_port: 1
+                schedule_read_freq: 600
+                pin_count: 9
+        Pin:
+            title: Root Type for Pin
+            description: ''
+            type: object
+            properties:
+                pin_id:
+                    format: int32
+                    type: integer
+                pin_number:
+                    format: int32
+                    type: integer
+                pin_type:
+                    format: int32
+                    type: integer
+            example:
+                pin_id: 10
+                pin_number: 1
+                pin_type: 2
+        SensorReading:
+            title: Root Type for SensorReading
+            description: 'Records the values read from a sensor   '
+            type: object
+            properties:
+                pinId:
+                    format: int32
+                    type: integer
+                value:
+                    format: double
+                    type: number
+            example:
+                pinId: 7
+                value: 120.43
+tags:
+    -
+        name: controller
+        description: Information about electronic suite controllers
+    -
+        name: driver
+        description: Information about driver boards that turn on motors and read sensors
+    -
+        name: pin
+        description: 'Information about specific pins on a driver board. Can be a sensor or a motor pin. '
+    -
+        name: reading
+        description: Sensor readings that have been captured from various devices
+    -
+        name: activation
+        description: Schedule of activation times for various motors
+    -
+        name: logging
+        description: Send messages from the controller boards to the server
