@@ -126,7 +126,7 @@ app.get('/driver/:driverId/pin', function (req, res) {
 app.get('/pin/:pinId/schedule', function (req, res) {
     sql.connect(sqlConfig, function() {	
         var request = new sql.Request();
-        var stringRequest = 'select activation_id, start_time, end_time, duration ' +
+        var stringRequest = 'select activation_id, start_time, end_time ' +
 		        'from pin p ' +
 		        'join activation a on a.pin_id = p.pin_id ' +
 		        'where p.pin_id = '+req.params.pinId;

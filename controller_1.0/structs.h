@@ -19,7 +19,6 @@ typedef struct {
   int activation_id;
   time_t start_time;
   time_t end_time;
-  byte duration; 
 } t_Activation;
 
 typedef struct {

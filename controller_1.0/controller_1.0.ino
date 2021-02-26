@@ -567,7 +567,6 @@ boolean downloadDriverSchedule(int d) {
         int counter = 0;
         for (JsonObject elem : doc["recordsets"][0].as<JsonArray>()) {
           driver[d].pins[t].schedule[counter].activation_id = elem["activation_id"]; // 1, 2, 3, 4
-          driver[d].pins[t].schedule[counter].duration      = elem["duration"]; // 30, 30, 30, 30
           String d1 = elem["start_time"];
           trace("elem('start_time']="+d1);
           if (!elem["start_time"].isNull()) {  // null=4
@@ -641,7 +640,7 @@ void webLogCurrentConfig(int level) {
         logvalues = logvalues + "{"+
         "'activation_id':" + String(driver[d].pins[p].schedule[a].activation_id) +"," +
         "'start_time':'"  + String("TIME HERE")+"'," +
-        "'duration':"      + String(driver[d].pins[p].schedule[a].duration) + "}";
+        "'end_time':'"  + String("TIME HERE")+"'}";
       }
       logvalues = logvalues + "]}";
     }
