@@ -34,7 +34,7 @@ var server = app.listen(8081, function () {
 });
 //Date.prototype.toJSON = function(){ return moment(this.addHours(-2)).format("YYYY-MM-DDTHH:mm:ss:ms"); }
 
-app.post('/controller', urlencodedParser, function (req, res) {
+app.post('/controller/register', urlencodedParser, function (req, res) {
     sql.connect(sqlConfig, function() {	
 		console.log(req.body);
         var request = new sql.Request();

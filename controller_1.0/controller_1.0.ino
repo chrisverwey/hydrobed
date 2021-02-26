@@ -45,7 +45,7 @@ WiFiUDP UDP;
 // additionaly you can specify the update interval (in milliseconds).
 NTPClient timeClient(UDP, "ntp.is.co.za", 7200, 86400000); // 24h refresh
 
-#define DEBUGLEVEL 2  // 0=INFO 1=DEBUG 2=TRACE
+#define DEBUGLEVEL 1  // 0=INFO 1=DEBUG 2=TRACE
 void info(String s) { if (SERIALDEBUG && DEBUGLEVEL>=0)  Serial.println("INFO  : "+s); Serial.flush();}
 void debug(String s) { if (SERIALDEBUG && DEBUGLEVEL>=1) Serial.println("DEBUG : "+s); Serial.flush();}
 void trace(String s) { if (SERIALDEBUG && DEBUGLEVEL>=2) Serial.println("TRACE : "+s); Serial.flush();}
@@ -433,7 +433,7 @@ void webRegisterWithHome() {
   trace("webRegisterWithHome:start");
   HTTPClient client;
   info("webRegisterWithHome:Register with home after startup");
-  webSendHeaders(client, "/controller");
+  webSendHeaders(client, "/controller/register");
 
   unsigned long mint = millis() / 1000;
 //  StaticJsonDocument<64> doc;
@@ -662,7 +662,7 @@ void webCheckinWithHome() {
   trace("webCheckinWithHome:start");
   HTTPClient client;
   info("webCheckinWithHome:Check in with home periodically");
-  webSendHeaders(client, "/controller");
+  webSendHeaders(client, "/controller/register");
 
   unsigned long mint = millis() / 1000;
 //  StaticJsonDocument<64> doc;
