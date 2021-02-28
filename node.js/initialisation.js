@@ -5,13 +5,8 @@ var bodyParser = require('body-parser');
 var moment = require('moment');
 
 // Connection string parameters.
-var sqlConfig = {
-    user: 'sa',
-    password: 'P@ssw0rd',
-    server: 'srvfedora2.ourhome.co.za',
-    port: 4433,
-    database: 'FARMM'
-}
+var config = require('./config');
+var sqlConfig = config.sqlConfig;
 //SQL options.useUTC
 
 app.use(bodyParser.json());
