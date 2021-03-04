@@ -45,7 +45,7 @@ WiFiUDP UDP;
 // additionaly you can specify the update interval (in milliseconds).
 NTPClient timeClient(UDP, "ntp.is.co.za", 7200, 86400000); // 24h refresh
 
-#define DEBUGLEVEL 1  // 0=INFO 1=DEBUG 2=TRACE
+#define DEBUGLEVEL 0  // 0=INFO 1=DEBUG 2=TRACE
 void info(String s) { if (SERIALDEBUG && DEBUGLEVEL>=0)  Serial.println("INFO  : "+s); Serial.flush();}
 void debug(String s) { if (SERIALDEBUG && DEBUGLEVEL>=1) Serial.println("DEBUG : "+s); Serial.flush();}
 void trace(String s) { if (SERIALDEBUG && DEBUGLEVEL>=2) Serial.println("TRACE : "+s); Serial.flush();}
