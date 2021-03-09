@@ -103,91 +103,9 @@ app.post('/reading', urlencodedParser, function (req, res) {
     });
 })
 
-// app.get('/controller/:controllerId/driver', function (req, res) {
-//     sql.connect(sqlConfig, function() {	
-//         var request = new sql.Request();
-//         var stringRequest = 'select d.driver_id, driver_type, i2c_port, schedule_read_freq, count(p.pin_id) as pin_count ' +
-// 				'from driver d '+
-// 				'join pin p on p.driver_id = d.driver_id ' +
-// 				'where controller_id = ' + req.params.controllerId + ' ' + 
-// 				'group by d.driver_id, driver_type, i2c_port, schedule_read_freq;'
-//     	console.log(stringRequest);
-//         request.query(stringRequest, function(err, recordset) {
-//             if(err) console.log(err);
-//             res.end(JSON.stringify(recordset)); // Result in JSON format
-//         });
-//     });
-// })
-
-// driver config
-// app.get('/driver/:driverId/pin', function (req, res) {
-//     sql.connect(sqlConfig, function() {	
-//         var request = new sql.Request();
-//         var stringRequest = 'select pin_id, pin_number, pin_type, alert_high, alert_low, warn_high, warn_low ' +
-// 		        ' from pin where driver_id = '+req.params.driverId;
-//     	console.log(stringRequest);
-//         request.query(stringRequest, function(err, recordset) {
-//             if(err) console.log(err);
-//             res.end(JSON.stringify(recordset)); // Result in JSON format
-//         });
-//     });
-// })
-
-// app.get('/pin/:pinId/schedule', function (req, res) {
-//     sql.connect(sqlConfig, function() {	
-//         var request = new sql.Request();
-//         var stringRequest = 'select activation_id, start_time, end_time ' +
-// 		        'from pin p ' +
-// 		        'join activation a on a.pin_id = p.pin_id ' +
-// 		        'where p.pin_id = '+req.params.pinId;
-//     	console.log(stringRequest);
-//         request.query(stringRequest, function(err, recordset) {
-//             if(err) console.log(err);
-//             res.end(JSON.stringify(recordset)); // Result in JSON format
-//         });
-//     });
-// })
-
-// controller
-// 	get
-// 	get/?
-// 	put/?
-// #	post
-// 	delete/?
 // logmessage
 // 	get # last 5 minutes
 // 	get?from=nnnn&to=nnnn
-// 	get/controller/? # last 5 minutes
-// 	get/controller/? # last 5 minutes
-// 	get/controller/n?from=nnnn&to=nnnn
-// #	post/?
-// 	delete/?
-// 	X put
-// activation
-// 	get/?
-// 	get/pin/? #gives all
-// 	get/pin/?/latest #gives latest
-// 	put/?
-// 	post
-// pin
-// 	get/?
-// 	get/driver/?
-// 	put/?
-// 	post
-// 	delete/?
-// driver
-// 	get/?
-// 	get/controller/?
-// 	put/?
-// 	post
-// 	delete/?
-// reading
-// 	get/?
-// 	get/controller/?
-// 	get/driver/?
-// 	get/pin/?
-// #	post
-// 	delete/?
 
 app.get('/activation' , function (req, res) {
     sql.connect(sqlConfig, function() {	
