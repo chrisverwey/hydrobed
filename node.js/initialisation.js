@@ -590,3 +590,35 @@ app.delete('/logmessage/:logmessageId' , function (req, res) {
         });
     });
  })
+app.get('/activationPage', function (req, res) {
+    sql.connect(sqlConfig, function() {	
+        var request = new sql.Request();
+        var stringRequest = 'select c.address, d.driver_id, p.pin_id, p.pin_number, p.name ' + 
+            'from controller c ' +
+        	'join driver d on d.controller_id = c.controller_id ' +
+        	'join pin p on p.driver_id = d.driver_id ' +
+        	'where pin_type=1 and c.controller_id=' + req.query.controllerId;
+        console.log(stringRequest);
+
+        request.query(stringRequest, function(err, result) {
+            if(err) console.log(err);
+	        var stringResponse = '<html><head><style>' +
+				'table, th, td {'+
+				'border: 0px solid black;'+
+				'border-collapse: collapse;'+
+				'} </style></head><body><H1>Turn on a device</H1>';
+	        stringResponse += 'Duration <form><input type="number" length="2" value="30" name="duration"/> <p/>';
+	        stringResponse += '<table>';
+			for (var i=0; i<result.recordset.length; i++) {
+				stringResponse+='<tr><td>'+result.recordset[i].name+
+					'</td><td><input type="button" value="Activate" onclick="window.location.href=\'http://'+result.recordset[i].address+
+					'/activate?driver='+(result.recordset[i].driver_id-1)+
+					'&pin='+result.recordset[i].pin_number+
+					'&duration=\'+duration.value"/></td></tr>';
+			}
+            stringResponse += '</table></form>';
+            stringResponse += '</body></html>';
+            res.end(stringResponse); // Result in JSON format
+        });
+    });
+})

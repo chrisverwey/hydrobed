@@ -22,6 +22,7 @@
 #include <ESP8266HTTPClient.h>
 #include <ESP8266mDNS.h>
 #include <ESP8266WiFi.h>
+#include <ESP8266WebServer.h>
 #include <NTPClient.h>
 #include "structs.h"
 #include "secrets.h"
@@ -66,7 +67,7 @@ time_t latest_schedule_read;
 // ----------------- Arduino core methods ------------
 // ---------------------------------------------------
 // TODO Move this down to Wifi section.
-WiFiServer server(80);  
+ESP8266WebServer webServer(80);  
 
 /*
  * Initialization 
@@ -124,23 +125,8 @@ void loop() {
 
   
   ArduinoOTA.handle();
-  WiFiClient client = server.available();
-//  if (client) 
-//    webClientRquest(client);
-//  }
-  bool hadAClient = false;
-  while (client.available()) {
-    hadAClient = true;
-    char c = client.read();
-    Serial.write(c);
-  }
+  webServer.handleClient();
 
-  // if the server's disconnected, stop the client:
-  if (hadAClient && !client.connected()) {
-    Serial.println();
-    Serial.println("disconnecting from server.");
-    client.stop();
-  }
   delay(100);
 }
 
@@ -287,60 +273,72 @@ void connectToWiFi() {
   trace("connectToWiFi:end");
 }
 
+void webHandleActivate(){
+  String s_driver = webServer.arg("driver");
+  String s_pin = webServer.arg("pin");
+  String s_duration = webServer.arg("duration");
+  int i_driver = -1; if (isDigit(s_driver.charAt(0))) i_driver = s_driver.toInt();
+  int i_pinNumber = -1; if (isDigit(s_pin.charAt(0))) i_pinNumber = s_pin.toInt();
+  int i_duration = -1; if (isDigit(s_duration.charAt(0))) i_duration = s_duration.toInt();
+
+  int i_pin = -1;
+  for (int p=0; p<driver[i_driver].pin_count; p++)
+      if (driver[i_driver].pins[p].pin_number == i_pinNumber) i_pin = p;
+      
+  if (i_driver<0 || i_pin<0 || i_duration<=5 || i_duration > 600) {
+  String message = "Invalid request to /activate \n\n";
+    message +="driver=";
+    message +=i_driver;
+    message +="\npin=";
+    message +=i_pinNumber;
+    message +="\nduration=";
+    message +=i_duration;
+    webServer.send(400, "text/plain", message);
+    webSendLoggingMessage(2,message);
+    info(message);
+  } else {
+    String message = "Received request to turn on driver ";
+    message += i_driver;
+    message += " pin ";
+    message += i_pinNumber;
+    message += " immediately for ";
+    message += i_duration;
+    message += " seconds.";
+    info(message);
+    webServer.send(200, "text/plain", message);
+    webSendLoggingMessage(1, message);
+    scheduleTurnOn(i_driver,i_pin, i_duration);
+  }
+}
+
+void webHandleNotFound() {
+  String message = "File Not Found\n\n";
+  message += "URI: ";
+  message += webServer.uri();
+  message += "\nMethod: ";
+  message += (webServer.method() == HTTP_GET) ? "GET" : "POST";
+  message += "\nArguments: ";
+  message += webServer.args();
+  message += "\n";
+  for (uint8_t i = 0; i < webServer.args(); i++) {
+    message += " " + webServer.argName(i) + ": " + webServer.arg(i) + "\n";
+  }
+  webServer.send(404, "text/plain", message);
+  webSendLoggingMessage(2,message);
+}
+
 void enableWebServer() {
   trace("enableWebServer:start");
   // Start the server
-  server.begin();
+  webServer.on("/activate", webHandleActivate);
+  webServer.onNotFound(webHandleNotFound);
+  
+  webServer.begin();
   info(F("Server started"));
   trace("enableWebServer:end");  
 }
 
-void webClientRequest(WiFiClient client) {
-  trace("webClientRequest:start");
-    // Check if a client has connected
 
-  client.setTimeout(5000); // default is 1000
-
-  // Read the first line of the request
-  String req = client.readStringUntil('\r');
-  debug(F("request: "));
-  debug(req);
-
-  // Match the request
-//  int val;
-//  if (req.indexOf(F("/gpio/0")) != -1) {
-//    val = 0;
-//  } else if (req.indexOf(F("/gpio/1")) != -1) {
-//    val = 1;
-//    debug("writing to i2c"); 
-//    Wire.beginTransmission(8);
-//    Wire.write("hello               "); 
-//    Wire.endTransmission();
-//  delay(500);
-//  } else {
-//    info(F("invalid request"));
-//    val = digitalRead(LED_BUILTIN);
-//  }
-
-  // read/ignore the rest of the request
-  // do not client.flush(): it is for output only, see below
-  while (client.available()) {
-    // byte by byte is not very efficient
-    client.read();
-  }
-
-  // Send the response to the client
-  // it is OK for multiple small client.print/write,
-  // because nagle algorithm will group them into one single packet
-//  client.print(F("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html>\r\nGPIO is now "));
-//  client.print("<HTML><body><h1>Not yet supported</h1></body></HTML>");
-
-  // The client will actually be *flushed* then disconnected
-  // when the function returns and 'client' object is destroyed (out-of-scope)
-  // flush = ensure written data are received by the other side
-  debug(F("Disconnecting from client"));
-  trace("webClientRequest:end");  
-}
 
 /*
  * This method sets up the header of a HTTP request.
@@ -599,9 +597,7 @@ boolean downloadDriverSchedule(int d) {
   trace("downloadDriverSchedule:end="+String(successful));
   return successful;
 }
-/*
- * TODO : Get the updated schedule
- */
+
 boolean webRefreshSchedule() {
   trace("webRefreshSchedule:start");
   bool completed = true;

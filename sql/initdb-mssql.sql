@@ -15,11 +15,12 @@ CREATE TABLE controller (
 	controller_id   INTEGER IDENTITY (1,1) PRIMARY KEY,
 	name			VARCHAR(30) NOT NULL,
 	mac_address		VARCHAR(20) NOT NULL,
+	address         VARCHAR(20) NOT NULL,
 	checkin_delay	NUMERIC(3) NOT NULL,
 	location		VARCHAR(30) NOT NULL,
 	last_updated    DATETIME NOT NULL
 );
-INSERT INTO controller VALUES ('HYDRO TEST BEDS', '40:F5:20:32:F7:3A',10,'-33.8813 18.5518','02/13/2021 21:54:00');
+INSERT INTO controller VALUES ('HYDRO TEST BEDS', '40:F5:20:32:F7:3A','172.16.1.154', 10,'-33.8813 18.5518','02/13/2021 21:54:00');
 
 CREATE TABLE driver (
 	driver_id		INTEGER IDENTITY (1,1) PRIMARY KEY,
@@ -92,9 +93,8 @@ create table activation (
 		REFERENCES pin(pin_id)
 );
 INSERT INTO activation VALUES 
-		(1,'06:57:00','06:57:30'),
-		(2,'06:57:00','06:57:30'),
-		(3,'06:57:00','06:57:30');
+		(1,'07:00:00','07:00:30'),
+		(2,'07:01:00','07:01:30');
 		-- (1,'06:55:00','06:55:30'),
 		-- (1,'15:00:00','15:00:30'),
 		-- (1,'15:02:00','15:02:30'),
