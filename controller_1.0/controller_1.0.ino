@@ -14,7 +14,7 @@
       <out> unit_16[] {n,v,n,v...}  
                   n is the pin number
                   v is the value, left shifted 2 digits (e.g.12.34 transmits as 1234}
-      e.g. 1,84.80,2,43.99 becomes {1,84,80,2,43,99} 
+      e.g. 1,84.80,2,43.99 becomes {1,8480,2,4399} 
 **/
 #include <ArduinoOTA.h>
 #include <ArduinoJson.h>
@@ -50,7 +50,7 @@ NTPClient timeClient(UDP, "ntp.is.co.za", 7200, 86400000); // 24h refresh
 void info(String s) { if (SERIALDEBUG && DEBUGLEVEL>=0)  Serial.println("INFO  : "+s); Serial.flush();}
 void debug(String s) { if (SERIALDEBUG && DEBUGLEVEL>=1) Serial.println("DEBUG : "+s); Serial.flush();}
 void trace(String s) { if (SERIALDEBUG && DEBUGLEVEL>=2) Serial.println("TRACE : "+s); Serial.flush();}
-void errorlog(String s) { Serial.println("ERROR : "+s);  Serial.flush();}
+void errorlog(String s) { Serial.println("ERROR : "+s);  Serial.flush(); webSendLoggingMessage(3,s);}
 
 DynamicJsonDocument doc(3072);
 
@@ -542,11 +542,11 @@ boolean downloadDriverSchedule(int d) {
   boolean successful = true;
   
   trace("downloadDriverSchedule:start");
-  // GET http://localhost:8081/pin/1/schedule
+  // GET http://localhost:8081/pin/1/activation
   info("downloadDriverSchedule:Updating driver "+String(driver[d].driver_id) + " schedule for " + driver[d].pin_count + " pins" );
   for (int t=0; t<driver[d].pin_count; t++) {
     HTTPClient client;
-    webSendHeaders(client, "/pin/"+String(driver[d].pins[t].pin_id)+"/schedule");
+    webSendHeaders(client, "/pin/"+String(driver[d].pins[t].pin_id)+"/activation");
     int err = client.GET();
     if (err==200) {
 
@@ -590,7 +590,7 @@ boolean downloadDriverSchedule(int d) {
       }
     } else {
       successful = false;
-      errorlog ("downloadDriverSchedule:http error "+String(err)+" getting driver schedule"); 
+      errorlog ("downloadDriverSchedule:http error "+String(err)+" getting driver schedule "+String(driver[d].pins[t].pin_id)); 
     }
     client.end();   
   } 
